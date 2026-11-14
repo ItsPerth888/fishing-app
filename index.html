@@ -632,6 +632,64 @@ function lureAdvice(cands, timeInfo, t){
   return {res, when};
 }
 
+// ---------- แนะนำน้ำหนักตะกั่ว / เหยื่อปลอม ----------
+const BIG=['Channa micropeltes','Pangasianodon hypophthalmus','Pangasianodon gigas','Pangasius sanitwongsei','Pangasius larnaudii','Wallago attu','Hemibagrus wyckioides','Lates calcarifer','Scomberomorus commerson','Rachycentron canadum','Catlocarpio siamensis','Probarbus jullieni','Chitala ornata','Epinephelus','Caranx','Euthynnus affinis','Osphronemus goramy','Ctenopharyngodon idella','Batoidea'];
+const SMALL=['Anabas testudineus','Trichopodus trichopterus','Trichopodus pectoralis','Rasbora','Henicorhynchus siamensis','Osteochilus','Mystus','Oreochromis mossambicus','Selaroides leptolepis','Rastrelliger brachysoma','Leiognathus','Nemipterus','Sillago sihama','Puntioplites proctozystron','Notopterus notopterus','Monopterus albus','Macrognathus siamensis','Channa limbata','Sarotherodon melanotheron','Scatophagus argus','Toxotes chatareus'];
+const sizeOf = sci => BIG.includes(sci)?2 : SMALL.includes(sci)?0 : 1;
+const DEPTHS=[['shallow','ตื้น (ไม่เกิน 1.5 ม.)',1],['mid','ปานกลาง (1.5–4 ม.)',3],['deep','ลึก (4–10 ม.)',7],['vdeep','ลึกมาก (10 ม. ขึ้นไป)',20]];
+const CURR=['น้ำนิ่ง','ไหลเบา / คลื่นเล็ก','ไหลแรง / คลื่นแรง'];
+const nice = g => g<10 ? Math.max(1,Math.round(g)) : Math.round(g/5)*5;
+const rng = (a,b,f=1) => `${nice(a*f)}–${nice(b*f)} กรัม`;
+let WT_STATE=null;
+function weightBox(cands, present){
+  const top=cands.filter(c=>c.level>=2).slice(0,15); if(!top.length) return '';
+  const defDepth = present.includes('S')||present.includes('D')||present.includes('R') ? 'mid' : 'shallow';
+  const defCur = present.includes('R')||present.includes('S')||present.includes('E') ? 1 : 0;
+  WT_STATE={top};
+  return `<div style="border:2px solid #c27b12;border-radius:14px;padding:12px;margin-bottom:12px">
+    <div style="font-weight:700;font-size:16px;margin-bottom:8px">⚖️ แนะนำน้ำหนักตะกั่วและเหยื่อปลอม</div>
+    <div class="row">
+      <div class="grow"><label>ปลาเป้าหมาย</label><select id="wtFish" style="width:100%">${top.map((c,i)=>`<option value="${i}">${c.f[0]}</option>`).join('')}</select></div>
+    </div>
+    <div class="row" style="margin-top:8px">
+      <div class="grow"><label>ความลึกตรงที่ตก (ประมาณ)</label><select id="wtDepth" style="width:100%">${DEPTHS.map(d=>`<option value="${d[0]}" ${d[0]===defDepth?'selected':''}>${d[1]}</option>`).join('')}</select></div>
+      <div class="grow"><label>กระแสน้ำ</label><select id="wtCur" style="width:100%">${CURR.map((t,i)=>`<option value="${i}" ${i===defCur?'selected':''}>${t}</option>`).join('')}</select></div>
+    </div>
+    <div id="wtOut" style="margin-top:10px"></div>
+    <div class="note" style="margin-top:6px">ค่าเริ่มต้นเดาจากประเภทแหล่งน้ำในรัศมี ปรับให้ตรงกับหน้างานได้ · เป็นค่าประมาณ ให้เริ่มจากน้ำหนักน้อยก่อน แล้วค่อยเพิ่มจนตะกั่วถึงพื้น หรือเหยื่อลงไปถึงระดับที่ต้องการ</div>
+  </div>`;
+}
+function renderWeights(){
+  if(!WT_STATE||!$('#wtOut')) return;
+  const c=WT_STATE.top[+$('#wtFish').value], d=DEPTHS.find(x=>x[0]===$('#wtDepth').value), cur=+$('#wtCur').value;
+  const sea=!/[RCDP]/.test(c.f[2]) || (c.match.length && c.match.every(k=>k==='S'||k==='E'));
+  const sz=sizeOf(c.f[1]), cf=[1,1.5,2.5][cur], dk=d[0], m=d[2];
+  const rows=[];
+  // ตกหน้าดิน
+  const bottomFresh={shallow:[5,10],mid:[10,20],deep:[20,40],vdeep:[30,60]}, bottomSea={shallow:[20,40],mid:[30,60],deep:[60,100],vdeep:[100,200]};
+  const b=(sea?bottomSea:bottomFresh)[dk]; rows.push(['🪨','ตะกั่วตกหน้าดิน', rng(b[0],b[1],cf)]);
+  // ตกทุ่น
+  if(cur===2) rows.push(['🎈','ตะกั่วสำหรับตกทุ่น','ไม่แนะนำให้ตกทุ่น เพราะน้ำแรง ทุ่นจะถูกพัดไป ใช้ตกหน้าดินแทน']);
+  else if(dk==='vdeep') rows.push(['🎈','ตะกั่วสำหรับตกทุ่น','น้ำลึกมาก ตกทุ่นยาก ใช้ตกหน้าดินแทน']);
+  else rows.push(['🎈','ตะกั่วสำหรับตกทุ่น', sea? rng(5,15,cur?1.3:1) : (dk==='deep'? rng(3,5,cur?1.3:1) : rng(1,3,cur?1.3:1)) + ' (ใช้ตะกั่วบีบ ให้ทุ่นจมเหลือแค่ปลายโผล่)']);
+  // เหยื่อปลอม
+  if(LURE[c.f[1]]){
+    const L=LURE[c.f[1]];
+    const base=[[2,7],[7,15],[12,30]][sz];
+    const dm={shallow:1,mid:1.2,deep:1.6,vdeep:2}[dk];
+    if(/ผิวน้ำ|กบยาง|ป็อปเปอร์/.test(L)) rows.push(['🐸','เหยื่อผิวน้ำ (กบยาง / ป็อปเปอร์)', rng(base[0],base[1])+' (ไม่ต้องเพิ่มตามความลึก)']);
+    if(/ปลั๊ก|ไบเบรชั่น/.test(L)) rows.push(['🎣','ปลั๊ก / ไบเบรชั่น', rng(base[0],base[1])+(dk==='shallow'?' (เลือกรุ่นลอยหรือดำตื้น)':dk==='mid'?' (เลือกรุ่นดำ 1–3 ม.)':' (เลือกรุ่นปากยาว ดำลึก)')]);
+    if(/สปินเนอร์|สปูน/.test(L)) rows.push(['🥄','สปินเนอร์ / สปูน', rng(base[0],base[1],Math.min(1.5,dm*(1+0.2*cur)))]);
+    if(/เหยื่อยาง/.test(L)){ const jh={shallow:[3,7],mid:[5,10],deep:[10,20],vdeep:[20,30]}[dk]; rows.push(['🪱','หัวจิ๊กสำหรับเหยื่อยาง', rng(jh[0],jh[1],1+0.4*cur)]); }
+    if(/จิ๊ก/.test(L)){ const jf=[1,1.3,1.8][cur]; rows.push(['🐟','เหยื่อจิ๊ก', rng(Math.max(10,m*1.5),Math.max(20,m*3),jf)+' (ประมาณ 1.5–3 กรัมต่อความลึก 1 เมตร)']); }
+    if(/ซาบิกิ/.test(L)) rows.push(['🔗','ตะกั่วถ่วงซาบิกิ', rng(10,30,cf)]);
+  } else rows.push(['🎯','เหยื่อปลอม', 'ปลาชนิดนี้ไม่นิยมตกด้วยเหยื่อปลอม']);
+  const line=[['4–8 ปอนด์','PE 0.4–0.8'],['10–20 ปอนด์','PE 1–2'],['20–40 ปอนด์','PE 2–4']][sz];
+  rows.push(['🧵','ขนาดสาย', `เอ็น ${line[0]} หรือสาย ${line[1]}`]);
+  $('#wtOut').innerHTML=rows.map(r=>`<div class="win"><span>${r[0]} ${r[1]}</span><b style="text-align:right;max-width:60%">${r[2]}</b></div>`).join('')
+    +`<div class="muted" style="margin-top:4px">ขนาดปลา${['เล็ก','กลาง','ใหญ่'][sz]} · ${sea?'ทะเล':'น้ำจืด'}</div>`;
+}
+
 async function search(){
   if(!st.hasLoc){ $('#locTxt').textContent='⚠️ กดใช้ GPS หรือแตะเลือกจุดบนแผนที่ก่อน'; return; }
   $('#goBtn').disabled=true;
@@ -697,6 +755,7 @@ async function search(){
     } else {
       h+=`<div class="note" style="border:1px dashed var(--line);padding:10px;border-radius:10px;margin-bottom:10px">🎯 ปลาที่มีโอกาสเจอแถวนี้ส่วนใหญ่ไม่นิยมตกด้วยเหยื่อปลอม แนะนำใช้เหยื่อสดดีกว่า</div>`;
     }
+    h+=weightBox(cands, present);
     const lv={3:'🟢 โอกาสเจอสูง',2:'🟡 โอกาสเจอปานกลาง',1:'⚪ โอกาสเจอน้อย'};
     // แยกน้ำจืด / ทะเล: ดูจากแหล่งน้ำที่ตรงกันในรัศมีก่อน ถ้าไม่มีดูจากนิสัยปลา
     const isSea = c => c.match.length ? c.match.some(k=>k==='S'||k==='E') && !c.match.some(k=>'RCDP'.includes(k)) : !/[RCDP]/.test(c.f[2]);
@@ -711,6 +770,7 @@ async function search(){
     if(arts.length) h+='<p class="muted" style="margin-top:12px">📖 อ้างอิงแหล่งน้ำ: '+arts.map(a=>`<a href="${a.url}" target="_blank">${a.title}</a>`).join(', ')+'</p>';
     out.innerHTML=h;
     document.querySelectorAll('.fish[data-sci]').forEach(el=>el.onclick=()=>toggle(el,m));
+    ['#wtFish','#wtDepth','#wtCur'].forEach(id=>{ const e=$(id); if(e) e.onchange=renderWeights; }); renderWeights();
   }catch(e){
     out.innerHTML=`<p>โหลดข้อมูลไม่สำเร็จ (${e.message}) — เช็กอินเทอร์เน็ตแล้วลองใหม่</p>`;
   }finally{ $('#goBtn').disabled=false; }
