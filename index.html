@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="หาปลา">
+<meta name="theme-color" content="#0b3d4f">
+<title>หาปลา — ปลาอะไรอยู่แถวนี้</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#f3f7f8;--card:#fff;--ink:#11262e;--mute:#5d7480;--pri:#0b6e83;--pri2:#0b3d4f;--ok:#2f8f4e;--warn:#c27b12;--line:#dbe5e8}
+*{box-sizing:border-box}
+body{margin:0;font-family:'IBM Plex Sans Thai',system-ui,sans-serif;background:var(--bg);color:var(--ink);
+  padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
+header{background:linear-gradient(135deg,var(--pri2),var(--pri));color:#fff;padding:18px 16px 14px}
+header h1{margin:0;font-size:22px}
+header p{margin:4px 0 0;opacity:.85;font-size:14px}
+main{max-width:720px;margin:0 auto;padding:12px}
+.card{background:var(--card);border-radius:14px;padding:14px;margin-bottom:12px;box-shadow:0 1px 3px rgba(0,0,0,.06)}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+button,select,input{font:inherit;font-size:16px;border-radius:10px;border:1px solid var(--line);padding:10px 12px;background:#fff;color:var(--ink)}
+button.pri{background:var(--pri);color:#fff;border:none;font-weight:600}
+button.big{width:100%;padding:14px;font-size:17px}
+button:disabled{opacity:.5}
+label{font-size:13px;color:var(--mute);display:block;margin-bottom:4px}
+.grow{flex:1;min-width:130px}
+#map{height:260px;border-radius:12px;margin-top:10px;z-index:0}
+.loc{font-size:13px;color:var(--mute);margin-top:6px}
+h2{font-size:17px;margin:0 0 10px}
+.muted{color:var(--mute);font-size:13px}
+.stars{color:#e0a400;font-size:18px;letter-spacing:2px}
+.win{display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px dashed var(--line);font-size:14px}
+.win:last-child{border:none}
+.tag{display:inline-block;font-size:12px;padding:2px 8px;border-radius:99px;background:#e7f2f4;color:var(--pri2);margin:2px 4px 2px 0}
+.tag.hot{background:#e5f5ea;color:var(--ok)}
+.tag.low{background:#fbf1e1;color:var(--warn)}
+.fish{border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:8px;cursor:pointer}
+.fish .n1{font-weight:700;font-size:16px}
+.fish .n2{font-style:italic;color:var(--mute);font-size:13px}
+.bars{display:flex;gap:3px;align-items:flex-end;height:70px;margin-top:10px}
+.bars div{flex:1;background:#bcd9df;border-radius:3px 3px 0 0;position:relative;min-height:2px}
+.bars div.cur{background:var(--pri)}
+.blabels{display:flex;gap:3px;font-size:10px;color:var(--mute)}
+.blabels span{flex:1;text-align:center}
+.detail{display:none;margin-top:8px}
+.fish.open .detail{display:block}
+a{color:var(--pri)}
+.spin{display:inline-block;width:16px;height:16px;border:2px solid #cfe;border-top-color:var(--pri);border-radius:50%;animation:s 1s linear infinite;vertical-align:-3px}
+@keyframes s{to{transform:rotate(360deg)}}
+.seg{display:flex;border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.seg button{border:none;border-radius:0;flex:1;padding:8px 6px;font-size:14px}
+.seg button.on{background:var(--pri);color:#fff}
+.note{font-size:12px;color:var(--mute);line-height:1.5}
+</style>
+</head>
+<body>
+<header>
+  <h1>🎣 หาปลา</h1>
+  <p>ปลาอะไรอยู่แถวนี้ ช่วงเดือนนี้ และเวลาไหนดี</p>
+</header>
+<main>
+<div id="errBox" class="card" style="display:none;color:#b3261e;font-size:13px"></div>
+
+<section class="card">
+  <h2>1. ตำแหน่งตกปลา</h2>
+  <button class="pri big" id="gpsBtn">📍 ใช้ตำแหน่ง GPS ตอนนี้</button>
+  <div id="map"></div>
+  <div class="row" style="margin-top:8px"><input id="latIn" class="grow" inputmode="decimal" placeholder="ละติจูด เช่น 13.75"><input id="lngIn" class="grow" inputmode="decimal" placeholder="ลองจิจูด เช่น 100.50"><button id="setLL">ตั้งจุด</button></div>
+  <div class="loc" id="locTxt">แตะบนแผนที่เพื่อเลือกจุดอื่นได้</div>
+  <div style="margin-top:10px">
+    <label>รัศมีค้นหา</label>
+    <div class="seg" id="radSeg">
+      <button data-r="2">2 กม.</button><button data-r="4" class="on">4 กม.</button><button data-r="10">10 กม.</button><button data-r="25">25 กม.</button><button data-r="50">50 กม.</button>
+    </div>
+  </div>
+</section>
+
+<section class="card">
+  <h2>2. วันและเวลาที่จะไป</h2>
+  <div class="row">
+    <div class="grow"><label>วันที่</label><input type="date" id="dateIn" style="width:100%"></div>
+    <div class="grow"><label>เวลา</label><input type="time" id="timeIn" style="width:100%"></div>
+  </div>
+  <button class="pri big" id="goBtn" style="margin-top:12px">🔎 ค้นหาปลา</button>
+</section>
+
+<section class="card" id="timeCard" style="display:none">
+  <h2>⏰ ช่วงเวลาที่น่าตก</h2>
+  <div id="timeOut"></div>
+</section>
+
+<section class="card" id="fishCard" style="display:none">
+  <h2 id="fishTitle">🐟 ปลาที่พบในพื้นที่</h2>
+  <div id="fishOut"></div>
+</section>
+
+<section class="card note">
+  ข้อมูลปลามาจาก <a href="https://www.gbif.org" target="_blank">GBIF</a> (ฐานข้อมูลการพบสิ่งมีชีวิตจริงทั่วโลก จากพิพิธภัณฑ์ งานวิจัย และนักสำรวจ) สภาพอากาศจาก <a href="https://open-meteo.com" target="_blank">Open-Meteo</a>.
+  ผลลัพธ์คือ "ปลาที่เคยมีคนบันทึกว่าพบในบริเวณนี้" ไม่ได้รับประกันว่าวันนั้นจะเจอ พื้นที่ที่มีคนบันทึกน้อยอาจมีข้อมูลน้อย ลองขยายรัศมีดู
+  ช่วงเวลาตามดวงจันทร์ (Solunar) เป็นค่าประมาณ ±1 ชม.
+</section>
+</main>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin="anonymous" onerror="window.__noLeaflet=1"></script>
+<script>
+window.addEventListener('error',e=>{const b=document.getElementById('errBox');if(b){b.style.display='block';b.textContent='⚠️ '+(e.message||'error')+(e.lineno?' (บรรทัด '+e.lineno+')':'');}});
+const $ = s => document.querySelector(s);
+const TH_M = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+const TH_MF = ['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน','กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
+const FISH_TAXA = ['204','121']; // GBIF: Actinopterygii (ปลากระดูกแข็ง), Elasmobranchii (ฉลาม/กระเบน)
+const BASIS = ['HUMAN_OBSERVATION','PRESERVED_SPECIMEN','OCCURRENCE','MACHINE_OBSERVATION','MATERIAL_SAMPLE','OBSERVATION'];
+
+const st = { lat: 13.7563, lng: 100.5018, radius: 4, hasLoc: false };
+try { const s = JSON.parse(localStorage.getItem('fishLoc')||'null'); if (s) { st.lat=s.lat; st.lng=s.lng; st.hasLoc=true; } } catch(e){}
+
+// ---------- date / time defaults ----------
+const now = new Date();
+const pad = n => String(n).padStart(2,'0');
+$('#dateIn').value = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}`;
+$('#timeIn').value = `${pad(now.getHours())}:${pad(now.getMinutes())}`;
+
+// ---------- map ----------
+let map=null, marker=null, circle=null;
+try{
+  if(typeof L==='undefined') throw new Error('no leaflet');
+  map = L.map('map',{zoomControl:true}).setView([st.lat,st.lng], st.hasLoc?13:6);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:18,attribution:'© OpenStreetMap'}).addTo(map);
+  map.on('click',e=>{st.lat=e.latlng.lat;st.lng=e.latlng.lng;st.hasLoc=true;drawLoc(false);});
+}catch(e){ map=null; const m=document.getElementById('map'); m.style.height='auto'; m.innerHTML='<div class="muted">โหลดแผนที่ไม่ได้ — ใช้ปุ่ม GPS หรือพิมพ์พิกัดด้านล่างแทน</div>'; }
+function drawLoc(fit){
+  if(map){ try{
+    if(marker){marker.remove();circle.remove();}
+    marker = L.marker([st.lat,st.lng]).addTo(map);
+    circle = L.circle([st.lat,st.lng],{radius:st.radius*1000,color:'#0b6e83',fillOpacity:.08}).addTo(map);
+    if(fit) map.fitBounds(circle.getBounds(),{padding:[10,10]});
+  }catch(e){} }
+  $('#latIn').value=st.lat.toFixed(5); $('#lngIn').value=st.lng.toFixed(5);
+  $('#locTxt').textContent = `📌 ${st.lat.toFixed(5)}, ${st.lng.toFixed(5)} · รัศมี ${st.radius} กม.`;
+  try{localStorage.setItem('fishLoc',JSON.stringify({lat:st.lat,lng:st.lng}))}catch(e){}
+}
+if(st.hasLoc) drawLoc(true);
+$('#setLL').onclick=()=>{const a=parseFloat($('#latIn').value), b=parseFloat($('#lngIn').value);
+  if(isNaN(a)||isNaN(b)||Math.abs(a)>90||Math.abs(b)>180){$('#locTxt').textContent='พิกัดไม่ถูกต้อง';return;}
+  st.lat=a;st.lng=b;st.hasLoc=true;drawLoc(true);};
+
+$('#gpsBtn').onclick = ()=>{
+  if(!navigator.geolocation){ $('#locTxt').textContent='เครื่องนี้ไม่รองรับ GPS — แตะบนแผนที่แทน'; return; }
+  $('#locTxt').innerHTML='<span class="spin"></span> กำลังหาตำแหน่ง...';
+  navigator.geolocation.getCurrentPosition(p=>{
+    st.lat=p.coords.latitude; st.lng=p.coords.longitude; st.hasLoc=true; drawLoc(true);
+  }, err=>{
+    $('#locTxt').textContent = 'หาตำแหน่งไม่ได้ ('+err.message+') — อนุญาตการเข้าถึงตำแหน่งใน Safari หรือแตะบนแผนที่แทน';
+  },{enableHighAccuracy:true,timeout:15000});
+};
+document.querySelectorAll('#radSeg button').forEach(b=>b.onclick=()=>{
+  document.querySelectorAll('#radSeg button').forEach(x=>x.classList.remove('on'));
+  b.classList.add('on'); st.radius=+b.dataset.r; if(st.hasLoc) drawLoc(true);
+});
+
+// ---------- sun & moon ----------
+const rad=Math.PI/180, dayMs=864e5, J1970=2440588, J2000=2451545, ob=rad*23.4397;
+const toDays = d => d.valueOf()/dayMs - 0.5 + J1970 - J2000;
+const fromJ = j => new Date((j + 0.5 - J1970) * dayMs);
+function sunTimes(date, lat, lng){
+  const lw=rad*-lng, phi=rad*lat, d=toDays(date);
+  const n=Math.round(d-0.0009-lw/(2*Math.PI));
+  const ds=0.0009+lw/(2*Math.PI)+n;
+  const M=rad*(357.5291+0.98560028*ds);
+  const C=rad*(1.9148*Math.sin(M)+0.02*Math.sin(2*M)+0.0003*Math.sin(3*M));
+  const L=M+C+rad*102.9372+Math.PI;
+  const dec=Math.asin(Math.sin(ob)*Math.sin(L));
+  const Jnoon=J2000+ds+0.0053*Math.sin(M)-0.0069*Math.sin(2*L);
+  const w=Math.acos((Math.sin(-0.833*rad)-Math.sin(phi)*Math.sin(dec))/(Math.cos(phi)*Math.cos(dec)));
+  const a=0.0009+(w+lw)/(2*Math.PI)+n;
+  const Jset=J2000+a+0.0053*Math.sin(M)-0.0069*Math.sin(2*L);
+  return {rise:fromJ(Jnoon-(Jset-Jnoon)), set:fromJ(Jset), noon:fromJ(Jnoon)};
+}
+function moonAge(date){
+  const syn=29.530588853, ref=Date.UTC(2000,0,6,18,14);
+  return (((date-ref)/dayMs)%syn+syn)%syn;
+}
+function moonInfo(date){
+  const age=moonAge(date), half=29.530588853/2;
+  const waxing = age<half;
+  const kham = Math.min(15, Math.max(1, Math.round(waxing?age:age-half)));
+  const icons=['🌑','🌒','🌓','🌔','🌕','🌖','🌗','🌘'];
+  const icon=icons[Math.round(age/29.53*8)%8];
+  const nearNewFull = Math.min(age, 29.53-age, Math.abs(age-half)) <= 2;
+  const name = (waxing?'ข้างขึ้น ':'ข้างแรม ')+kham+' ค่ำ';
+  return {age, icon, name, good:nearNewFull};
+}
+const fmt = d => d.toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'});
+const addMin = (d,m) => new Date(d.getTime()+m*60000);
+
+function windowsFor(dateStr, lat, lng){
+  const noonLocal = new Date(dateStr+'T12:00:00');
+  const s = sunTimes(noonLocal, lat, lng);
+  const moon = moonInfo(noonLocal);
+  // ดวงจันทร์ผ่านเมริเดียนโดยประมาณ: ตามเวลาเที่ยงสุริยะ + อายุจันทร์ × 50.5 นาที
+  const transit = addMin(s.noon, moon.age*50.47);
+  const wins = [
+    {name:'🌅 รุ่งเช้า (ปลากินเหยื่อดี)', a:addMin(s.rise,-60), b:addMin(s.rise,90), score:2},
+    {name:'🌇 พลบค่ำ (ปลากินเหยื่อดี)', a:addMin(s.set,-90), b:addMin(s.set,60), score:2},
+  ];
+  // major = จันทร์อยู่เหนือหัว/ใต้เท้า (2 ชม.), minor = จันทร์ขึ้น/ตก (1 ชม.)
+  [0,12.42,-12.42].forEach(h=>{
+    const t=addMin(transit,h*60);
+    wins.push({name:'🌙 ช่วงหลัก Solunar', a:addMin(t,-60), b:addMin(t,60), score:2, solunar:true});
+  });
+  [6.21,-6.21,18.63,-18.63].forEach(h=>{
+    const t=addMin(transit,h*60);
+    wins.push({name:'🌙 ช่วงรอง Solunar', a:addMin(t,-30), b:addMin(t,30), score:1, solunar:true});
+  });
+  const dayStart=new Date(dateStr+'T00:00:00'), dayEnd=new Date(dateStr+'T23:59:59');
+  const list = wins.filter(w=>w.b>dayStart && w.a<dayEnd).sort((x,y)=>x.a-y.a);
+  return {sun:s, moon, list};
+}
+
+function rateTime(info, t){
+  let score=0, why=[];
+  info.list.forEach(w=>{ if(t>=w.a && t<=w.b){ score+=w.score; why.push(w.name.replace(/^\S+\s/,'')); } });
+  if(info.moon.good){ score+=1; why.push('ใกล้วันเดือนมืด/เดือนเพ็ญ'); }
+  const stars = Math.max(1, Math.min(5, 1+score));
+  return {stars, why};
+}
+
+async function weatherAt(dateStr, timeStr){
+  const today=new Date(); today.setHours(0,0,0,0);
+  const diff=(new Date(dateStr+'T00:00:00')-today)/dayMs;
+  if(diff<0||diff>15) return null;
+  const u=`https://api.open-meteo.com/v1/forecast?latitude=${st.lat}&longitude=${st.lng}&hourly=temperature_2m,precipitation_probability,surface_pressure,wind_speed_10m,cloud_cover&timezone=auto&start_date=${dateStr}&end_date=${dateStr}`;
+  const r=await fetch(u); if(!r.ok) return null; const j=await r.json();
+  const h=+timeStr.split(':')[0]; const H=j.hourly;
+  const p=H.surface_pressure, i=h, prev=Math.max(0,h-3);
+  return {temp:H.temperature_2m[i], rain:H.precipitation_probability[i], wind:H.wind_speed_10m[i],
+    cloud:H.cloud_cover[i], pres:p[i], trend:p[i]-p[prev]};
+}
+
+async function renderTime(){
+  const dateStr=$('#dateIn').value, timeStr=$('#timeIn').value||'06:00';
+  const info=windowsFor(dateStr, st.lat, st.lng);
+  const t=new Date(dateStr+'T'+timeStr+':00');
+  const r=rateTime(info,t);
+  let h=`<div class="row" style="justify-content:space-between">
+    <div><div class="muted">เวลาที่เลือก ${timeStr} น.</div><div class="stars">${'★'.repeat(r.stars)}${'☆'.repeat(5-r.stars)}</div></div>
+    <div style="text-align:right"><div style="font-size:26px">${info.moon.icon}</div><div class="muted">${info.moon.name}</div></div></div>
+    <div class="muted" style="margin:6px 0 10px">${r.why.length? 'เพราะ: '+r.why.join(', ') : 'ไม่อยู่ในช่วงพีค ลองดูช่วงเวลาด้านล่าง'}</div>
+    <div class="muted">☀️ ขึ้น ${fmt(info.sun.rise)} · ตก ${fmt(info.sun.set)}</div>`;
+  h+='<div style="margin-top:8px">'+info.list.map(w=>`<div class="win"><span>${w.name}</span><b>${fmt(w.a)}–${fmt(w.b)}</b></div>`).join('')+'</div>';
+  h+='<div id="wx" class="muted" style="margin-top:10px"><span class="spin"></span> กำลังโหลดสภาพอากาศ...</div>';
+  $('#timeOut').innerHTML=h; $('#timeCard').style.display='block';
+  try{
+    const w=await weatherAt(dateStr,timeStr);
+    if(!w){ $('#wx').textContent='พยากรณ์อากาศดูได้เฉพาะ 16 วันข้างหน้า'; return; }
+    let pt = w.trend<-1.5?'กำลังลด 📉 (ปลามักกินเหยื่อดีก่อนฝน/ความกดต่ำ)': w.trend>1.5?'กำลังเพิ่ม 📈 (ปลาอาจกินช้าลง)':'คงที่';
+    $('#wx').innerHTML=`🌡️ ${Math.round(w.temp)}°C · 🌧️ โอกาสฝน ${w.rain??'-'}% · 💨 ลม ${Math.round(w.wind)} กม./ชม. · ☁️ เมฆ ${w.cloud}%<br>ความกดอากาศ ${Math.round(w.pres)} hPa — ${pt}`;
+  }catch(e){ $('#wx').textContent='โหลดสภาพอากาศไม่ได้'; }
+}
+
+// ---------- GBIF ----------
+function gbif(extra){
+  const p=new URLSearchParams();
+  p.set('geoDistance',`${st.lat.toFixed(5)},${st.lng.toFixed(5)},${st.radius}km`);
+  FISH_TAXA.forEach(k=>p.append('taxonKey',k));
+  BASIS.forEach(b=>p.append('basisOfRecord',b));
+  p.set('hasCoordinate','true'); p.set('occurrenceStatus','PRESENT'); p.set('limit','0');
+  Object.entries(extra).forEach(([k,v])=>[].concat(v).forEach(x=>p.append(k,x)));
+  return fetch('https://api.gbif.org/v1/occurrence/search?'+p).then(r=>{ if(!r.ok) throw new Error('GBIF '+r.status); return r.json(); });
+}
+const facetMap = j => { const m={}; ((j.facets||[])[0]||{counts:[]}).counts.forEach(c=>m[c.name]=c.count); return m; };
+
+const nameCache={};
+async function speciesName(key){
+  if(nameCache[key]) return nameCache[key];
+  const [sp, vn] = await Promise.all([
+    fetch('https://api.gbif.org/v1/species/'+key).then(r=>r.json()).catch(()=>({})),
+    fetch('https://api.gbif.org/v1/species/'+key+'/vernacularNames?limit=200').then(r=>r.json()).catch(()=>({results:[]}))
+  ]);
+  const res=vn.results||[];
+  const th=res.find(v=>v.language==='tha'); const en=res.find(v=>v.language==='eng');
+  return nameCache[key]={sci:sp.canonicalName||sp.scientificName||('#'+key), th:th&&th.vernacularName, en:(en&&en.vernacularName)||sp.vernacularName, family:sp.family};
+}
+async function pool(items, n, fn){ const out=[]; let i=0;
+  await Promise.all(Array.from({length:n},async()=>{ while(i<items.length){ const k=i++; out[k]=await fn(items[k]); } })); return out; }
+
+async function search(){
+  if(!st.hasLoc){ $('#locTxt').textContent='⚠️ กดใช้ GPS หรือแตะเลือกจุดบนแผนที่ก่อน'; return; }
+  $('#goBtn').disabled=true;
+  renderTime();
+  const m = new Date($('#dateIn').value+'T12:00:00').getMonth()+1;
+  const win=[(m+10)%12+1, m, m%12+1];
+  $('#fishCard').style.display='block';
+  $('#fishTitle').textContent=`🐟 ปลาในรัศมี ${st.radius} กม. ช่วง${TH_MF[m-1]}`;
+  $('#fishOut').innerHTML='<div class="muted"><span class="spin"></span> กำลังค้นข้อมูลการพบปลา...</div>';
+  try{
+    const [all, wm, mm] = await Promise.all([
+      gbif({facet:'speciesKey',facetLimit:200}),
+      gbif({facet:'speciesKey',facetLimit:200,month:win}),
+      gbif({facet:'speciesKey',facetLimit:200,month:m}),
+    ]);
+    const A=facetMap(all), W=facetMap(wm), M=facetMap(mm);
+    const keys=Object.keys(A);
+    if(!keys.length){
+      $('#fishOut').innerHTML=`<p>ยังไม่มีบันทึกการพบปลาในรัศมี ${st.radius} กม.</p><p class="muted">ลองขยายรัศมีเป็น 10–25 กม. แล้วค้นหาใหม่</p>`;
+      return;
+    }
+    const rows=keys.map(k=>{
+      const total=A[k], w=W[k]||0, mo=M[k]||0;
+      const idx = total>=4 ? (w/3)/(total/12) : null; // ชุกกว่าค่าเฉลี่ยรายเดือนกี่เท่า
+      return {k,total,w,mo,idx};
+    });
+    const inSeason=rows.filter(r=>r.w>0).sort((a,b)=>b.mo-a.mo||b.w-a.w||b.total-a.total);
+    const other=rows.filter(r=>r.w===0).sort((a,b)=>b.total-a.total);
+    const show=[...inSeason.slice(0,40), ...other.slice(0,20)];
+    $('#fishOut').innerHTML=`<div class="muted"><span class="spin"></span> พบ ${keys.length} ชนิด กำลังโหลดชื่อปลา...</div>`;
+    const names=await pool(show.map(r=>r.k),6,speciesName);
+    show.forEach((r,i)=>r.n=names[i]);
+    let h=`<p class="muted">พบทั้งหมด ${keys.length} ชนิด จาก ${all.count.toLocaleString()} บันทึก · <b>${inSeason.length}</b> ชนิดมีบันทึกช่วง ${TH_M[win[0]-1]}–${TH_M[win[2]-1]}</p>`;
+    if(keys.length<5) h+=`<p class="muted">💡 ข้อมูลในจุดนี้ยังน้อย ลองขยายรัศมีเพื่อดูภาพรวมมากขึ้น</p>`;
+    h+= inSeason.length? '<h3 style="font-size:15px">✅ มีแนวโน้มเจอช่วงนี้</h3>'+inSeason.slice(0,40).map(card).join('') : '<p>ไม่มีบันทึกช่วงเดือนนี้</p>';
+    if(other.length) h+='<h3 style="font-size:15px;margin-top:16px">💤 เคยพบในพื้นที่ แต่ไม่มีบันทึกช่วงนี้</h3>'+other.slice(0,20).map(card).join('');
+    $('#fishOut').innerHTML=h;
+    document.querySelectorAll('.fish').forEach(el=>el.onclick=()=>toggle(el, m));
+  }catch(e){
+    $('#fishOut').innerHTML=`<p>โหลดข้อมูลไม่สำเร็จ (${e.message}) — เช็กอินเทอร์เน็ตแล้วลองใหม่</p>`;
+  }finally{ $('#goBtn').disabled=false; }
+}
+
+function card(r){
+  const n=r.n||{sci:r.k};
+  const title = n.th || n.en || n.sci;
+  let tags=`<span class="tag">ทั้งปี ${r.total} บันทึก</span>`;
+  if(r.mo) tags+=`<span class="tag hot">เดือนนี้ ${r.mo}</span>`;
+  if(r.idx!==null && r.idx>=1.4) tags+=`<span class="tag hot">🔥 ชุกกว่าปกติ ×${r.idx.toFixed(1)}</span>`;
+  else if(r.idx!==null && r.w>0 && r.idx<0.6) tags+=`<span class="tag low">น้อยกว่าปกติ</span>`;
+  return `<div class="fish" data-k="${r.k}" data-sci="${n.sci}">
+    <div class="n1">${title}</div>
+    <div class="n2">${n.sci}${n.th&&n.en?' · '+n.en:''}${n.family?' · วงศ์ '+n.family:''}</div>
+    <div style="margin-top:6px">${tags}</div>
+    <div class="detail"></div></div>`;
+}
+
+async function toggle(el, m){
+  el.classList.toggle('open');
+  const d=el.querySelector('.detail');
+  if(!el.classList.contains('open')||d.dataset.done) return;
+  d.innerHTML='<span class="spin"></span>';
+  try{
+    const j=await gbif({speciesKey:el.dataset.k,facet:'month',facetLimit:12});
+    const F=facetMap(j); const vals=Array.from({length:12},(_,i)=>F[i+1]||0); const mx=Math.max(1,...vals);
+    const best=vals.map((v,i)=>[v,i]).filter(x=>x[0]>0).sort((a,b)=>b[0]-a[0]).slice(0,3).map(x=>TH_M[x[1]]);
+    const sci=el.dataset.sci;
+    d.innerHTML=`<div class="muted">จำนวนบันทึกการพบแต่ละเดือน (ในรัศมีนี้)</div>
+      <div class="bars">${vals.map((v,i)=>`<div class="${i===m-1?'cur':''}" style="height:${v/mx*100}%" title="${v}"></div>`).join('')}</div>
+      <div class="blabels">${TH_M.map(x=>`<span>${x.replace('.','').slice(0,2)}</span>`).join('')}</div>
+      ${best.length?`<p class="muted">เดือนที่พบบ่อยสุด: <b>${best.join(', ')}</b></p>`:''}
+      <div class="row" style="margin-top:6px">
+        <a href="https://www.fishbase.se/summary/${sci.replace(/ /g,'-')}.html" target="_blank">FishBase (รูป/นิสัย/เหยื่อ)</a> ·
+        <a href="https://www.gbif.org/species/${el.dataset.k}" target="_blank">GBIF</a> ·
+        <a href="https://www.google.com/search?tbm=isch&q=${encodeURIComponent(sci)}" target="_blank">ดูรูป</a>
+      </div>`;
+    d.dataset.done=1;
+  }catch(e){ d.textContent='โหลดไม่สำเร็จ'; }
+}
+
+$('#goBtn').onclick=search;
+</script>
+</body>
+</html>
