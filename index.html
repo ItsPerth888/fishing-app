@@ -70,6 +70,13 @@ a{color:var(--pri)}
   <div class="row" style="margin-top:8px"><input id="latIn" class="grow" inputmode="decimal" placeholder="ละติจูด เช่น 13.75"><input id="lngIn" class="grow" inputmode="decimal" placeholder="ลองจิจูด เช่น 100.50"><button id="setLL">ตั้งจุด</button></div>
   <div class="loc" id="locTxt">แตะบนแผนที่เพื่อเลือกจุดอื่นได้</div>
   <div style="margin-top:10px">
+    <label>ประเภทแหล่งน้ำ (ตรวจอัตโนมัติจากแผนที่ แก้เองได้)</label>
+    <div class="seg" id="habSeg">
+      <button data-h="auto" class="on">🔍 อัตโนมัติ</button><button data-h="fresh">🏞️ น้ำจืด</button><button data-h="sea">🌊 ทะเล</button><button data-h="all">ทั้งหมด</button>
+    </div>
+    <div class="loc" id="waterTxt"></div>
+  </div>
+  <div style="margin-top:10px">
     <label>รัศมีค้นหา</label>
     <div class="seg" id="radSeg">
       <button data-r="2">2 กม.</button><button data-r="4" class="on">4 กม.</button><button data-r="10">10 กม.</button><button data-r="25">25 กม.</button><button data-r="50">50 กม.</button>
@@ -98,7 +105,7 @@ a{color:var(--pri)}
 
 <section class="card note">
   ข้อมูลปลามาจาก <a href="https://www.gbif.org" target="_blank">GBIF</a> (ฐานข้อมูลการพบสิ่งมีชีวิตจริงทั่วโลก จากพิพิธภัณฑ์ งานวิจัย และนักสำรวจ) สภาพอากาศจาก <a href="https://open-meteo.com" target="_blank">Open-Meteo</a>.
-  ผลลัพธ์คือ "ปลาที่เคยมีคนบันทึกว่าพบในบริเวณนี้" ไม่ได้รับประกันว่าวันนั้นจะเจอ พื้นที่ที่มีคนบันทึกน้อยอาจมีข้อมูลน้อย ลองขยายรัศมีดู
+  รายชื่อปลาประเมินจากแหล่งอาศัยตามธรรมชาติรอบจุดที่เลือก (ถ้าข้อมูลในรัศมีที่เลือกน้อย แอปจะขยายวงให้อัตโนมัติ) แล้วกรองตามประเภทแหล่งน้ำจาก OpenStreetMap ไม่ได้รับประกันว่าวันนั้นจะเจอทุกชนิด
   ช่วงเวลาตามดวงจันทร์ (Solunar) เป็นค่าประมาณ ±1 ชม.
 </section>
 </main>
@@ -285,6 +292,35 @@ async function speciesName(key){
 async function pool(items, n, fn){ const out=[]; let i=0;
   await Promise.all(Array.from({length:n},async()=>{ while(i<items.length){ const k=i++; out[k]=await fn(items[k]); } })); return out; }
 
+// ---------- แหล่งน้ำรอบจุด (OpenStreetMap) ----------
+st.hab='auto';
+document.querySelectorAll('#habSeg button').forEach(b=>b.onclick=()=>{
+  document.querySelectorAll('#habSeg button').forEach(x=>x.classList.remove('on'));
+  b.classList.add('on'); st.hab=b.dataset.h;
+});
+async function detectWater(){
+  const q=`[out:json][timeout:20];(way(around:1500,${st.lat},${st.lng})[waterway~"river|canal|stream"];way(around:1500,${st.lat},${st.lng})[natural=water];relation(around:1500,${st.lat},${st.lng})[natural=water];way(around:3000,${st.lat},${st.lng})[natural=coastline];way(around:3000,${st.lat},${st.lng})[natural~"bay|beach"];);out tags 40;`;
+  const r=await fetch('https://overpass-api.de/api/interpreter',{method:'POST',body:'data='+encodeURIComponent(q),headers:{'Content-Type':'application/x-www-form-urlencoded'}});
+  if(!r.ok) throw new Error('overpass');
+  const els=(await r.json()).elements||[];
+  let sea=0, fresh=0; const names=new Set();
+  els.forEach(e=>{const t=e.tags||{};
+    if(t.natural==='coastline'||t.natural==='bay'||t.natural==='beach'||t.water==='lagoon') sea++; else fresh++;
+    const n=t['name:th']||t.name; if(n) names.add(n);});
+  let type = sea? 'sea' : fresh? 'fresh' : null;
+  return {type, names:[...names].slice(0,5)};
+}
+
+const profCache={};
+async function habitatOf(key){
+  if(profCache[key]) return profCache[key];
+  const j=await fetch('https://api.gbif.org/v1/species/'+key+'/speciesProfiles').then(r=>r.json()).catch(()=>({results:[]}));
+  const h={fresh:false,sea:false,known:false};
+  (j.results||[]).forEach(p=>{ if(p.freshwater===true){h.fresh=true;h.known=true;} if(p.marine===true){h.sea=true;h.known=true;}
+    const hb=(p.habitat||'').toLowerCase(); if(hb.includes('brackish')){h.fresh=h.sea=h.known=true;} });
+  return profCache[key]=h;
+}
+
 async function search(){
   if(!st.hasLoc){ $('#locTxt').textContent='⚠️ กดใช้ GPS หรือแตะเลือกจุดบนแผนที่ก่อน'; return; }
   $('#goBtn').disabled=true;
@@ -292,67 +328,78 @@ async function search(){
   const m = new Date($('#dateIn').value+'T12:00:00').getMonth()+1;
   const win=[(m+10)%12+1, m, m%12+1];
   $('#fishCard').style.display='block';
-  $('#fishTitle').textContent=`🐟 ปลาในรัศมี ${st.radius} กม. ช่วง${TH_MF[m-1]}`;
-  $('#fishOut').innerHTML='<div class="muted"><span class="spin"></span> กำลังค้นข้อมูลการพบปลา...</div>';
+  $('#fishTitle').textContent='🐟 ปลาที่อาศัยในบริเวณนี้';
+  const out=$('#fishOut'); const msg=t=>out.innerHTML=`<div class="muted"><span class="spin"></span> ${t}</div>`;
+  const keepR=st.radius;
   try{
-    const [all, wm, mm] = await Promise.all([
-      gbif({facet:'speciesKey',facetLimit:200}),
-      gbif({facet:'speciesKey',facetLimit:200,month:win}),
-      gbif({facet:'speciesKey',facetLimit:200,month:m}),
-    ]);
-    const A=facetMap(all), W=facetMap(wm), M=facetMap(mm);
-    const keys=Object.keys(A);
-    if(!keys.length){
-      $('#fishOut').innerHTML=`<p>ยังไม่มีบันทึกการพบปลาในรัศมี ${st.radius} กม.</p><p class="muted">ลองขยายรัศมีเป็น 10–25 กม. แล้วค้นหาใหม่</p>`;
-      return;
+    // 1) ประเภทแหล่งน้ำ
+    let hab=st.hab;
+    if(hab==='auto'){
+      msg('กำลังดูว่าจุดนี้เป็นแหล่งน้ำแบบไหน...');
+      try{ const w=await detectWater(); hab=w.type||'all';
+        $('#waterTxt').textContent = w.type ? `ตรวจพบ: ${w.type==='sea'?'🌊 ทะเล/ชายฝั่ง':'🏞️ น้ำจืด'}${w.names.length?' — '+w.names.join(', '):''}` : 'ไม่พบแหล่งน้ำในแผนที่ใกล้จุดนี้ — แสดงทั้งหมด (เลือกประเภทเองได้)';
+      }catch(e){ hab='all'; $('#waterTxt').textContent='ตรวจแหล่งน้ำไม่ได้ — แสดงทั้งหมด (เลือกประเภทเองได้)'; }
+    } else $('#waterTxt').textContent='';
+    // 2) หารัศมีที่มีข้อมูลพอ (แหล่งอาศัยของปลากว้างกว่าจุดที่เคยมีคนบันทึก)
+    const steps=[...new Set([keepR,15,30,60].filter(x=>x>=keepR))];
+    let all, A, used=keepR;
+    for(const r of steps){
+      st.radius=r; used=r; msg(`กำลังค้นแหล่งอาศัยของปลารอบ ${r} กม....`);
+      all=await gbif({facet:'speciesKey',facetLimit:150}); A=facetMap(all);
+      if(Object.keys(A).length>=25) break;
     }
-    const rows=keys.map(k=>{
-      const total=A[k], w=W[k]||0, mo=M[k]||0;
-      const idx = total>=4 ? (w/3)/(total/12) : null; // ชุกกว่าค่าเฉลี่ยรายเดือนกี่เท่า
-      return {k,total,w,mo,idx};
-    });
-    const inSeason=rows.filter(r=>r.w>0).sort((a,b)=>b.mo-a.mo||b.w-a.w||b.total-a.total);
-    const other=rows.filter(r=>r.w===0).sort((a,b)=>b.total-a.total);
-    const show=[...inSeason.slice(0,40), ...other.slice(0,20)];
-    $('#fishOut').innerHTML=`<div class="muted"><span class="spin"></span> พบ ${keys.length} ชนิด กำลังโหลดชื่อปลา...</div>`;
-    const names=await pool(show.map(r=>r.k),6,speciesName);
-    show.forEach((r,i)=>r.n=names[i]);
-    let h=`<p class="muted">พบทั้งหมด ${keys.length} ชนิด จาก ${all.count.toLocaleString()} บันทึก · <b>${inSeason.length}</b> ชนิดมีบันทึกช่วง ${TH_M[win[0]-1]}–${TH_M[win[2]-1]}</p>`;
-    if(keys.length<5) h+=`<p class="muted">💡 ข้อมูลในจุดนี้ยังน้อย ลองขยายรัศมีเพื่อดูภาพรวมมากขึ้น</p>`;
-    h+= inSeason.length? '<h3 style="font-size:15px">✅ มีแนวโน้มเจอช่วงนี้</h3>'+inSeason.slice(0,40).map(card).join('') : '<p>ไม่มีบันทึกช่วงเดือนนี้</p>';
-    if(other.length) h+='<h3 style="font-size:15px;margin-top:16px">💤 เคยพบในพื้นที่ แต่ไม่มีบันทึกช่วงนี้</h3>'+other.slice(0,20).map(card).join('');
-    $('#fishOut').innerHTML=h;
-    document.querySelectorAll('.fish').forEach(el=>el.onclick=()=>toggle(el, m));
+    const wm=await gbif({facet:'speciesKey',facetLimit:300,month:win}); const W=facetMap(wm);
+    st.radius=keepR;
+    let keys=Object.keys(A).sort((x,y)=>A[y]-A[x]).slice(0,120);
+    if(!keys.length){ out.innerHTML='<p>ยังไม่มีข้อมูลปลาในบริเวณนี้ ลองเลือกจุดใกล้แหล่งน้ำมากขึ้น</p>'; return; }
+    // 3) กรองตามแหล่งอาศัย
+    msg('กำลังตรวจแหล่งอาศัยของปลาแต่ละชนิด...');
+    const habs=await pool(keys,8,habitatOf);
+    let rows=keys.map((k,i)=>({k,h:habs[i],total:A[k],w:W[k]||0}));
+    if(hab!=='all') rows=rows.filter(r=>!r.h.known || (hab==='fresh'?r.h.fresh:r.h.sea));
+    rows.forEach(r=>{ r.idx = r.total>=4 ? (r.w/3)/(r.total/12) : null; r.season = r.w>0 && (r.idx===null || r.idx>=0.8); });
+    rows.sort((a,b)=>(b.season-a.season)||(b.total-a.total));
+    rows=rows.slice(0,60);
+    msg(`พบ ${rows.length} ชนิด กำลังโหลดชื่อปลา...`);
+    const names=await pool(rows.map(r=>r.k),6,speciesName);
+    rows.forEach((r,i)=>r.n=names[i]);
+    const nS=rows.filter(r=>r.season).length;
+    let h=`<p class="muted">${rows.length} ชนิดที่มีแหล่งอาศัยครอบคลุมบริเวณนี้${hab==='fresh'?' (น้ำจืด)':hab==='sea'?' (ทะเล)':''} · ประเมินจากข้อมูลรอบ ${used} กม.
+      ${nS?`<br>🔥 = ช่วง ${TH_M[win[0]-1]}–${TH_M[win[2]-1]} เป็นฤดูที่พบชุก (${nS} ชนิด)`:''}</p>`;
+    h+=rows.map(card).join('');
+    out.innerHTML=h;
+    document.querySelectorAll('.fish').forEach(el=>el.onclick=()=>toggle(el, m, used));
   }catch(e){
-    $('#fishOut').innerHTML=`<p>โหลดข้อมูลไม่สำเร็จ (${e.message}) — เช็กอินเทอร์เน็ตแล้วลองใหม่</p>`;
-  }finally{ $('#goBtn').disabled=false; }
+    out.innerHTML=`<p>โหลดข้อมูลไม่สำเร็จ (${e.message}) — เช็กอินเทอร์เน็ตแล้วลองใหม่</p>`;
+  }finally{ st.radius=keepR; $('#goBtn').disabled=false; }
 }
 
 function card(r){
   const n=r.n||{sci:r.k};
   const title = n.th || n.en || n.sci;
-  let tags=`<span class="tag">ทั้งปี ${r.total} บันทึก</span>`;
-  if(r.mo) tags+=`<span class="tag hot">เดือนนี้ ${r.mo}</span>`;
-  if(r.idx!==null && r.idx>=1.4) tags+=`<span class="tag hot">🔥 ชุกกว่าปกติ ×${r.idx.toFixed(1)}</span>`;
-  else if(r.idx!==null && r.w>0 && r.idx<0.6) tags+=`<span class="tag low">น้อยกว่าปกติ</span>`;
+  let tags='';
+  if(r.h.fresh) tags+='<span class="tag">🏞️ น้ำจืด</span>';
+  if(r.h.sea) tags+='<span class="tag">🌊 ทะเล</span>';
+  if(r.season) tags+='<span class="tag hot">🔥 ช่วงนี้</span>';
   return `<div class="fish" data-k="${r.k}" data-sci="${n.sci}">
     <div class="n1">${title}</div>
     <div class="n2">${n.sci}${n.th&&n.en?' · '+n.en:''}${n.family?' · วงศ์ '+n.family:''}</div>
-    <div style="margin-top:6px">${tags}</div>
+    ${tags?`<div style="margin-top:6px">${tags}</div>`:''}
     <div class="detail"></div></div>`;
 }
 
-async function toggle(el, m){
+async function toggle(el, m, used){
   el.classList.toggle('open');
   const d=el.querySelector('.detail');
   if(!el.classList.contains('open')||d.dataset.done) return;
   d.innerHTML='<span class="spin"></span>';
   try{
-    const j=await gbif({speciesKey:el.dataset.k,facet:'month',facetLimit:12});
+    const keepR=st.radius; st.radius=used||keepR;
+    let j; try{ j=await gbif({speciesKey:el.dataset.k,facet:'month',facetLimit:12}); } finally { st.radius=keepR; }
     const F=facetMap(j); const vals=Array.from({length:12},(_,i)=>F[i+1]||0); const mx=Math.max(1,...vals);
     const best=vals.map((v,i)=>[v,i]).filter(x=>x[0]>0).sort((a,b)=>b[0]-a[0]).slice(0,3).map(x=>TH_M[x[1]]);
     const sci=el.dataset.sci;
-    d.innerHTML=`<div class="muted">จำนวนบันทึกการพบแต่ละเดือน (ในรัศมีนี้)</div>
+    d.innerHTML=`<div class="muted">ฤดูกาลที่พบในบริเวณนี้ (ยิ่งสูง ยิ่งพบบ่อย)</div>
       <div class="bars">${vals.map((v,i)=>`<div class="${i===m-1?'cur':''}" style="height:${v/mx*100}%" title="${v}"></div>`).join('')}</div>
       <div class="blabels">${TH_M.map(x=>`<span>${x.replace('.','').slice(0,2)}</span>`).join('')}</div>
       ${best.length?`<p class="muted">เดือนที่พบบ่อยสุด: <b>${best.join(', ')}</b></p>`:''}
