@@ -37,6 +37,8 @@ h2{font-size:17px;margin:0 0 10px}
 .tag.hot{background:#e5f5ea;color:var(--ok)}
 .tag.low{background:#fbf1e1;color:var(--warn)}
 .fish{border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:8px;cursor:pointer}
+.pic{width:96px;height:72px;flex:none;border-radius:10px;background:#e7f2f4;display:flex;align-items:center;justify-content:center;font-size:30px;overflow:hidden}
+.pic img{width:100%;height:100%;object-fit:cover}
 .fish .n1{font-weight:700;font-size:16px}
 .fish .n2{font-style:italic;color:var(--mute);font-size:13px}
 .bars{display:flex;gap:3px;align-items:flex-end;height:70px;margin-top:10px}
@@ -104,7 +106,7 @@ a{color:var(--pri)}
 </section>
 
 <section class="card note">
-  ข้อมูลปลามาจาก <a href="https://www.gbif.org" target="_blank">GBIF</a> (ฐานข้อมูลการพบสิ่งมีชีวิตจริงทั่วโลก จากพิพิธภัณฑ์ งานวิจัย และนักสำรวจ) รายชื่อปลาตามแหล่งน้ำจาก <a href="https://th.wikipedia.org" target="_blank">วิกิพีเดีย</a> · สภาพอากาศจาก <a href="https://open-meteo.com" target="_blank">Open-Meteo</a>.
+  ข้อมูลปลามาจาก <a href="https://www.gbif.org" target="_blank">GBIF</a> (ฐานข้อมูลการพบสิ่งมีชีวิตจริงทั่วโลก จากพิพิธภัณฑ์ งานวิจัย และนักสำรวจ) รายชื่อปลาตามแหล่งน้ำจาก <a href="https://th.wikipedia.org" target="_blank">วิกิพีเดีย</a> · รูปปลาจาก Wikipedia / Wikimedia Commons · สภาพอากาศจาก <a href="https://open-meteo.com" target="_blank">Open-Meteo</a>.
   รายชื่อปลาเป็นการคาดคะเน จากประเภทแหล่งน้ำในรัศมี (OpenStreetMap) × นิสัยปลาไทยที่นิยมตก × ฤดูกาล (GBIF ทั้งประเทศ) × ข้อมูลการพบจริงในรัศมีและบทความแหล่งน้ำ (Wikipedia) ไม่ได้รับประกันว่าวันนั้นจะเจอ
   ช่วงเวลาตามดวงจันทร์ (Solunar) เป็นค่าประมาณ ±1 ชม.
 </section>
@@ -472,6 +474,23 @@ async function seasonOf(sci){ // จำนวนบันทึกรายเ�
 }
 const inRadius = sci => gbifName(sci,{},true).then(j=>j.count||0).catch(()=>0);
 
+let imgCache={}; try{ imgCache=JSON.parse(localStorage.getItem('fishImg')||'{}'); }catch(e){}
+async function fishImages(scis){ // รูปปลาจาก Wikipedia (ดึงทีละ 50 ชื่อในครั้งเดียว)
+  const need=scis.filter(s=>!(s in imgCache));
+  for(let i=0;i<need.length;i+=50){
+    const part=need.slice(i,i+50);
+    try{
+      const j=await wget(`https://en.wikipedia.org/w/api.php?action=query&prop=pageimages&piprop=thumbnail&pithumbsize=400&redirects=1&format=json&origin=*&titles=${encodeURIComponent(part.join('|'))}`);
+      const q=j.query||{}, map={}; part.forEach(s=>map[s]=s);
+      (q.normalized||[]).forEach(n=>{ for(const k in map) if(map[k]===n.from) map[k]=n.to; });
+      (q.redirects||[]).forEach(r=>{ for(const k in map) if(map[k]===r.from) map[k]=r.to; });
+      const byTitle={}; Object.values(q.pages||{}).forEach(p=>byTitle[p.title]=p.thumbnail&&p.thumbnail.source);
+      part.forEach(s=>imgCache[s]=byTitle[map[s]]||null);
+    }catch(e){}
+  }
+  try{ localStorage.setItem('fishImg',JSON.stringify(imgCache)); }catch(e){}
+}
+
 const MONTH_TIP = m => [11,12,1].includes(m) ? 'ช่วงน้ำลด อากาศเย็น ปลามักออกหากินช่วงสายถึงบ่ายที่แดดอุ่น และเริ่มลงไปอยู่ในแหล่งน้ำหลัก'
   : [2,3,4].includes(m) ? 'หน้าแล้ง น้ำน้อย ปลารวมกันอยู่ตามวังน้ำลึกและจุดที่มีร่มเงา ตกเช้ามืดหรือพลบค่ำจะดีกว่า'
   : 'หน้าน้ำ ปลากระจายตัวและผสมพันธุ์ ลองตกตามชายตลิ่ง ทางน้ำไหลเข้า และพงหญ้าริมน้ำ (ตรวจสอบช่วงห้ามจับปลาฤดูวางไข่ของกรมประมงด้วย)';
@@ -519,6 +538,8 @@ async function search(){
       c.level = c.score>=5.5?3 : c.score>=3?2 : 1;
     });
     cands.sort((a,b)=>b.score-a.score);
+    msg('กำลังโหลดรูปปลา...');
+    await fishImages(cands.map(c=>c.f[1]));
 
     // 4) แสดงผล
     let h=`<p class="muted">คาดคะเนจากแหล่งน้ำในรัศมี ${st.radius} กม. ร่วมกับนิสัยของปลา ฤดูกาลเดือน${TH_MF[m-1]} และข้อมูลการพบจริง</p>
@@ -541,11 +562,17 @@ function card(c,m){
   if(c.rec) tags+=`<span class="tag hot">📍 เคยพบจริงในรัศมี</span>`;
   if(c.sf>=1.2) tags+='<span class="tag hot">🔥 ฤดูนี้ชุก</span>';
   else if(c.sf<=0.75) tags+='<span class="tag low">💤 นอกฤดู</span>';
+  const img=imgCache[f[1]];
   return `<div class="fish" data-sci="${f[1]}">
-    <div class="n1">${f[0]}</div>
-    <div class="n2">${f[1]}</div>
-    <div style="margin-top:6px">${tags}</div>
-    <div class="muted" style="margin-top:6px">🪝 เหยื่อ: ${f[4]}</div>
+    <div style="display:flex;gap:12px">
+      <div class="pic">${img?`<img src="${img}" alt="${f[0]}" loading="lazy" onerror="this.parentNode.innerHTML='🐟'">`:'🐟'}</div>
+      <div style="flex:1;min-width:0">
+        <div class="n1">${f[0]}</div>
+        <div class="n2">${f[1]}</div>
+        <div style="margin-top:6px">${tags}</div>
+        <div class="muted" style="margin-top:6px">🪝 เหยื่อ: ${f[4]}</div>
+      </div>
+    </div>
     <div class="detail"></div></div>`;
 }
 
