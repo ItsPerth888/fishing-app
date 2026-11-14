@@ -698,8 +698,16 @@ async function search(){
       h+=`<div class="note" style="border:1px dashed var(--line);padding:10px;border-radius:10px;margin-bottom:10px">🎯 ปลาที่มีโอกาสเจอแถวนี้ส่วนใหญ่ไม่นิยมตกด้วยเหยื่อปลอม แนะนำใช้เหยื่อสดดีกว่า</div>`;
     }
     const lv={3:'🟢 โอกาสเจอสูง',2:'🟡 โอกาสเจอปานกลาง',1:'⚪ โอกาสเจอน้อย'};
-    [3,2,1].forEach(L=>{ const g=cands.filter(c=>c.level===L); if(!g.length) return;
-      h+=`<h3 style="font-size:15px;margin:14px 0 8px">${lv[L]} (${g.length})</h3>`+g.map(c=>card(c,m)).join(''); });
+    // แยกน้ำจืด / ทะเล: ดูจากแหล่งน้ำที่ตรงกันในรัศมีก่อน ถ้าไม่มีดูจากนิสัยปลา
+    const isSea = c => c.match.length ? c.match.some(k=>k==='S'||k==='E') && !c.match.some(k=>'RCDP'.includes(k)) : !/[RCDP]/.test(c.f[2]);
+    const groups=[['🏞️ ปลาน้ำจืด', cands.filter(c=>!isSea(c)), '#e7f2f4'], ['🌊 ปลาทะเล / น้ำกร่อย', cands.filter(isSea), '#e3eefb']];
+    const shown=groups.filter(g=>g[1].length);
+    if(shown.length>1) h+=`<div class="row" style="margin-bottom:8px">${shown.map((g,i)=>`<a href="#grp${i}" class="tag" style="font-size:14px;padding:6px 12px;text-decoration:none">${g[0]} (${g[1].length})</a>`).join('')}</div>`;
+    shown.forEach(([title,list,bg],i)=>{
+      h+=`<div id="grp${i}" style="background:${bg};border-radius:12px;padding:10px 12px;margin:16px 0 8px;font-weight:700;font-size:17px">${title} <span class="muted" style="font-weight:400">${list.length} ชนิด</span></div>`;
+      [3,2,1].forEach(L=>{ const g=list.filter(c=>c.level===L); if(!g.length) return;
+        h+=`<h3 style="font-size:15px;margin:12px 0 8px">${lv[L]} (${g.length})</h3>`+g.map(c=>card(c,m)).join(''); });
+    });
     if(arts.length) h+='<p class="muted" style="margin-top:12px">📖 อ้างอิงแหล่งน้ำ: '+arts.map(a=>`<a href="${a.url}" target="_blank">${a.title}</a>`).join(', ')+'</p>';
     out.innerHTML=h;
     document.querySelectorAll('.fish[data-sci]').forEach(el=>el.onclick=()=>toggle(el,m));
