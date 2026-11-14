@@ -104,7 +104,7 @@ a{color:var(--pri)}
 </section>
 
 <section class="card note">
-  ข้อมูลปลามาจาก <a href="https://www.gbif.org" target="_blank">GBIF</a> (ฐานข้อมูลการพบสิ่งมีชีวิตจริงทั่วโลก จากพิพิธภัณฑ์ งานวิจัย และนักสำรวจ) สภาพอากาศจาก <a href="https://open-meteo.com" target="_blank">Open-Meteo</a>.
+  ข้อมูลปลามาจาก <a href="https://www.gbif.org" target="_blank">GBIF</a> (ฐานข้อมูลการพบสิ่งมีชีวิตจริงทั่วโลก จากพิพิธภัณฑ์ งานวิจัย และนักสำรวจ) รายชื่อปลาตามแหล่งน้ำจาก <a href="https://th.wikipedia.org" target="_blank">วิกิพีเดีย</a> · สภาพอากาศจาก <a href="https://open-meteo.com" target="_blank">Open-Meteo</a>.
   รายชื่อปลาประเมินจากแหล่งอาศัยตามธรรมชาติรอบจุดที่เลือก (ถ้าข้อมูลในรัศมีที่เลือกน้อย แอปจะขยายวงให้อัตโนมัติ) แล้วกรองตามประเภทแหล่งน้ำจาก OpenStreetMap ไม่ได้รับประกันว่าวันนั้นจะเจอทุกชนิด
   ช่วงเวลาตามดวงจันทร์ (Solunar) เป็นค่าประมาณ ±1 ชม.
 </section>
@@ -299,16 +299,102 @@ document.querySelectorAll('#habSeg button').forEach(b=>b.onclick=()=>{
   b.classList.add('on'); st.hab=b.dataset.h;
 });
 async function detectWater(){
-  const q=`[out:json][timeout:20];(way(around:1500,${st.lat},${st.lng})[waterway~"river|canal|stream"];way(around:1500,${st.lat},${st.lng})[natural=water];relation(around:1500,${st.lat},${st.lng})[natural=water];way(around:3000,${st.lat},${st.lng})[natural=coastline];way(around:3000,${st.lat},${st.lng})[natural~"bay|beach"];);out tags 40;`;
+  const A=`(around:1500,${st.lat},${st.lng})`, C=`(around:3000,${st.lat},${st.lng})`;
+  const q=`[out:json][timeout:20];(way${A}[waterway~"river|canal|stream"];relation${A}[waterway=river];way${A}[natural=water];relation${A}[natural=water];way${C}[natural=coastline];way${C}[natural~"bay|beach"];relation${C}[natural=bay];);out tags 60;`;
   const r=await fetch('https://overpass-api.de/api/interpreter',{method:'POST',body:'data='+encodeURIComponent(q),headers:{'Content-Type':'application/x-www-form-urlencoded'}});
   if(!r.ok) throw new Error('overpass');
   const els=(await r.json()).elements||[];
-  let sea=0, fresh=0; const names=new Set();
+  let sea=0, fresh=0; const feats=[], seen=new Set();
   els.forEach(e=>{const t=e.tags||{};
-    if(t.natural==='coastline'||t.natural==='bay'||t.natural==='beach'||t.water==='lagoon') sea++; else fresh++;
-    const n=t['name:th']||t.name; if(n) names.add(n);});
-  let type = sea? 'sea' : fresh? 'fresh' : null;
-  return {type, names:[...names].slice(0,5)};
+    const isSea = t.natural==='coastline'||t.natural==='bay'||t.natural==='beach'||t.water==='lagoon';
+    if(isSea) sea++; else fresh++;
+    const name=t['name:th']||t.name; if(!name||seen.has(name)) return; seen.add(name);
+    const big = t.waterway==='river'||t.water==='reservoir'||t.water==='lake'||t.natural==='bay';
+    feats.push({name, en:t['name:en'], wp:t.wikipedia, wd:t.wikidata, score:(t.wikidata||t.wikipedia?10:0)+(big?5:0)+(e.type==='relation'?2:0)});
+  });
+  feats.sort((x,y)=>y.score-x.score);
+  // ทะเลไทย: เดาว่าเป็นอ่าวไทยหรืออันดามัน เพื่อหาบทความ
+  if(sea && st.lat>5 && st.lat<14.5 && st.lng>97 && st.lng<106){
+    const andaman = st.lng<98.95 || (st.lat<8 && st.lng<100.3);
+    feats.push({name: andaman?'ทะเลอันดามัน':'อ่าวไทย', score:1});
+  }
+  return {type: sea?'sea':fresh?'fresh':null, names:feats.map(f=>f.name).slice(0,5), feats};
+}
+
+// ---------- Wikipedia ----------
+const FISH=[ // [ชื่อไทย, ชื่อวิทยาศาสตร์, f=น้ำจืด s=ทะเล b=น้ำกร่อย]
+['ปลาช่อน','Channa striata','f'],['ปลาชะโด','Channa micropeltes','f'],['ปลากระสง','Channa lucius','f'],['ปลาก้าง','Channa limbata','f'],
+['ปลาดุกด้าน','Clarias batrachus','f'],['ปลาดุกอุย','Clarias macrocephalus','f'],['ปลาดุกอัฟริกัน','Clarias gariepinus','f'],['ปลาดุก','Clarias','f'],
+['ปลาหมอเทศ','Oreochromis mossambicus','f'],['ปลาหมอคางดำ','Sarotherodon melanotheron','b'],['ปลาหมอบัตเตอร์','Heterotilapia buttikoferi','f'],['ปลาหมอไทย','Anabas testudineus','f'],['ปลาหมอ','Anabas testudineus','f'],
+['ปลานิล','Oreochromis niloticus','f'],['ปลาทับทิม','Oreochromis','f'],
+['ปลาตะเพียนขาว','Barbonymus gonionotus','f'],['ปลาตะเพียนทอง','Barbonymus altus','f'],['ปลาตะเพียน','Barbonymus gonionotus','f'],['ปลากระแห','Barbonymus schwanenfeldii','f'],
+['ปลายี่สกเทศ','Labeo rohita','f'],['ปลายี่สก','Probarbus jullieni','f'],['ปลาเสือตอ','Datnioides','f'],['ปลากราย','Chitala ornata','f'],['ปลาสลาด','Notopterus notopterus','f'],
+['ปลาสวาย','Pangasianodon hypophthalmus','f'],['ปลาบึก','Pangasianodon gigas','f'],['ปลาเทพา','Pangasius sanitwongsei','f'],['ปลาเทโพ','Pangasius larnaudii','f'],['ปลาเผาะ','Pangasius bocourti','f'],
+['ปลาแขยง','Mystus','f'],['ปลากดเหลือง','Hemibagrus nemurus','f'],['ปลากดคัง','Hemibagrus wyckioides','f'],['ปลากด','Hemibagrus','f'],
+['ปลาเค้าขาว','Wallago attu','f'],['ปลาเค้าดำ','Wallago micropogon','f'],['ปลาเค้า','Wallago','f'],['ปลาเนื้ออ่อน','Phalacronotus','f'],
+['ปลาสร้อยขาว','Henicorhynchus siamensis','f'],['ปลาสร้อยนกเขา','Osteochilus','f'],['ปลาสร้อย','Henicorhynchus','f'],
+['ปลากระดี่','Trichopodus trichopterus','f'],['ปลาสลิด','Trichopodus pectoralis','f'],['ปลากัด','Betta splendens','f'],['ปลาซิว','Rasbora','f'],
+['ปลาไหลนา','Monopterus albus','f'],['ปลาไหล','Monopterus albus','f'],['ปลาหลด','Macrognathus siamensis','f'],['ปลากระทิง','Mastacembelus armatus','f'],
+['ปลาบู่ทราย','Oxyeleotris marmorata','f'],['ปลาบู่','Oxyeleotris marmorata','f'],['ปลาแรด','Osphronemus goramy','f'],['ปลากระโห้','Catlocarpio siamensis','f'],
+['ปลาตะโกก','Cyclocheilos enoplos','f'],['ปลาไน','Cyprinus carpio','f'],['ปลานวลจันทร์เทศ','Cirrhinus cirrhosus','f'],['ปลานวลจันทร์','Cirrhinus microlepis','f'],
+['ปลาเฉา','Ctenopharyngodon idella','f'],['ปลาซ่ง','Hypophthalmichthys nobilis','f'],['ปลาลิ่น','Hypophthalmichthys molitrix','f'],['ปลาหางไหม้','Balantiocheilos melanopterus','f'],
+['ปลากระสูบขีด','Hampala macrolepidota','f'],['ปลากระสูบจุด','Hampala dispar','f'],['ปลากระสูบ','Hampala','f'],['ปลากระมัง','Puntioplites proctozystron','f'],
+['ปลาม้า','Boesemania microlepis','f'],['ปลาซักเกอร์','Pterygoplichthys','f'],['ปลาเสือพ่นน้ำ','Toxotes chatareus','b'],['ปลาปักเป้า','Tetraodontidae','b'],
+['ปลากะพงขาว','Lates calcarifer','b'],['ปลากระพงขาว','Lates calcarifer','b'],['ปลากะพงแดง','Lutjanus','s'],['ปลากระพงแดง','Lutjanus','s'],['ปลากะพงข้างปาน','Lutjanus russellii','s'],['ปลากะพง','Lates calcarifer','b'],
+['ปลาเก๋า','Epinephelus','s'],['ปลาอินทรี','Scomberomorus commerson','s'],['ปลาโอ','Euthynnus affinis','s'],['ปลาทู','Rastrelliger brachysoma','s'],['ปลาลัง','Rastrelliger kanagurta','s'],
+['ปลาสีกุน','Carangidae','s'],['ปลาข้างเหลือง','Selaroides leptolepis','s'],['ปลาหางแข็ง','Megalaspis cordyla','s'],['ปลาสาก','Sphyraena','s'],['ปลากุเลา','Eleutheronema tetradactylum','s'],
+['ปลาจะละเม็ดขาว','Pampus argenteus','s'],['ปลาจะละเม็ดดำ','Parastromateus niger','s'],['ปลาจะละเม็ด','Pampus','s'],['ปลาจาระเม็ด','Pampus','s'],
+['ปลากระบอก','Mugilidae','b'],['ปลาเห็ดโคน','Sillago sihama','s'],['ปลาทรายแดง','Nemipterus','s'],['ปลาตาหวาน','Priacanthus','s'],['ปลาสำลี','Seriolina nigrofasciata','s'],
+['ปลาช่อนทะเล','Rachycentron canadum','s'],['ปลากะตัก','Stolephorus','s'],['ปลาหลังเขียว','Sardinella','s'],['ปลากดทะเล','Arius','s'],['ปลาดุกทะเล','Plotosus canius','s'],
+['ปลาตีน','Periophthalmus','b'],['ปลาจวด','Johnius','s'],['ปลาแป้น','Leiognathus','s'],['ปลาวัว','Balistidae','s'],['ปลานกแก้ว','Scaridae','s'],
+['ปลากระเบน','Batoidea','s'],['ปลาฉลาม','Selachimorpha','s'],['ปลาโลมา',null,null]
+].filter(x=>x[1]);
+const FISH_SORTED=[...FISH].sort((a,b)=>b[0].length-a[0].length);
+
+function findFish(text){
+  const found=new Map(), used=[];
+  const free=(i,j)=>!used.some(([a,b])=>i<b&&j>a);
+  const take=(name,i,f)=>{ used.push([i,i+name.length]); if(!found.has(f[0])) found.set(f[0],f); };
+  // 1) ชื่อเต็ม "ปลาxxx"
+  for(const f of FISH_SORTED){ let i=-1; while((i=text.indexOf(f[0],i+1))>=0) if(free(i,i+f[0].length)) take(f[0],i,f); }
+  // 2) ชื่อย่อในประโยครายชื่อปลา เช่น "ปลาช่อน ชะโด กระสง"
+  let i=-1; while((i=text.indexOf('ปลา',i+1))>=0){
+    const end=Math.min(text.length, (text.indexOf('\n',i)+1||text.length+1)-1, i+250); const win=text.slice(i,end);
+    for(const f of FISH_SORTED){ const bare=f[0].slice(3); if(bare.length<3) continue;
+      let k=-1; while((k=win.indexOf(bare,k+1))>=0){ const p=i+k; if(free(p,p+bare.length)) take(bare,p,f); } }
+  }
+  // 3) ชื่อวิทยาศาสตร์ (สำหรับบทความภาษาอังกฤษ)
+  FISH.forEach(f=>{ if(f[1].includes(' ') && text.includes(f[1]) && ![...found.values()].some(x=>x[1]===f[1])) found.set(f[0],f); });
+  const bySci=new Set(); return [...found.values()].filter(f=>!bySci.has(f[1])&&bySci.add(f[1]));
+}
+const wget = u => fetch(u).then(r=>r.json());
+async function wikiExtract(lang,title){
+  const j=await wget(`https://${lang}.wikipedia.org/w/api.php?action=query&prop=extracts&explaintext=1&redirects=1&format=json&origin=*&titles=${encodeURIComponent(title)}`);
+  const p=Object.values((j.query||{}).pages||{})[0];
+  if(!p||'missing' in p||!p.extract) return null;
+  return {lang,title:p.title,text:p.extract,url:`https://${lang}.wikipedia.org/wiki/${encodeURIComponent(p.title.replace(/ /g,'_'))}`};
+}
+async function wikiSearch(lang,q){
+  const j=await wget(`https://${lang}.wikipedia.org/w/api.php?action=query&list=search&srlimit=1&format=json&origin=*&srsearch=${encodeURIComponent(q)}`);
+  const h=((j.query||{}).search||[])[0]; return h&&h.title;
+}
+async function wikiForPlace(feats){
+  const arts=[], seen=new Set();
+  for(const f of feats.slice(0,3)){
+    const titles={};
+    try{
+      if(f.wp){ const [l,...t]=f.wp.split(':'); if(l==='th'||l==='en') titles[l]=t.join(':'); }
+      if(f.wd && (!titles.th||!titles.en)){
+        const j=await wget(`https://www.wikidata.org/w/api.php?action=wbgetentities&ids=${f.wd}&props=sitelinks&sitefilter=thwiki|enwiki&format=json&origin=*`);
+        const sl=((j.entities||{})[f.wd]||{}).sitelinks||{};
+        if(sl.thwiki&&!titles.th) titles.th=sl.thwiki.title; if(sl.enwiki&&!titles.en) titles.en=sl.enwiki.title;
+      }
+      if(!titles.th && /[ก-๙]/.test(f.name)){ const t=await wikiSearch('th',f.name); if(t && (t.includes(f.name)||f.name.includes(t))) titles.th=t; }
+      for(const l of ['th','en']) if(titles[l] && !seen.has(l+titles[l])){ seen.add(l+titles[l]);
+        const a=await wikiExtract(l,titles[l]); if(a){ a.place=f.name; a.fish=findFish(a.text); arts.push(a); } }
+    }catch(e){}
+  }
+  return arts;
 }
 
 const profCache={};
@@ -332,27 +418,24 @@ async function search(){
   const out=$('#fishOut'); const msg=t=>out.innerHTML=`<div class="muted"><span class="spin"></span> ${t}</div>`;
   const keepR=st.radius;
   try{
-    // 1) ประเภทแหล่งน้ำ
+    // 1) แหล่งน้ำรอบจุด
+    msg('กำลังดูว่าแถวนี้มีแหล่งน้ำอะไร...');
+    let water=null; try{ water=await detectWater(); }catch(e){}
     let hab=st.hab;
-    if(hab==='auto'){
-      msg('กำลังดูว่าจุดนี้เป็นแหล่งน้ำแบบไหน...');
-      try{ const w=await detectWater(); hab=w.type||'all';
-        $('#waterTxt').textContent = w.type ? `ตรวจพบ: ${w.type==='sea'?'🌊 ทะเล/ชายฝั่ง':'🏞️ น้ำจืด'}${w.names.length?' — '+w.names.join(', '):''}` : 'ไม่พบแหล่งน้ำในแผนที่ใกล้จุดนี้ — แสดงทั้งหมด (เลือกประเภทเองได้)';
-      }catch(e){ hab='all'; $('#waterTxt').textContent='ตรวจแหล่งน้ำไม่ได้ — แสดงทั้งหมด (เลือกประเภทเองได้)'; }
-    } else $('#waterTxt').textContent='';
-    // 2) หารัศมีที่มีข้อมูลพอ (แหล่งอาศัยของปลากว้างกว่าจุดที่เคยมีคนบันทึก)
+    if(hab==='auto') hab=(water&&water.type)||'all';
+    $('#waterTxt').textContent = water ? (water.type ? `ตรวจพบ: ${water.type==='sea'?'🌊 ทะเล/ชายฝั่ง':'🏞️ น้ำจืด'}${water.names.length?' — '+water.names.join(', '):''}` : 'ไม่พบแหล่งน้ำในแผนที่ใกล้จุดนี้') : 'ตรวจแหล่งน้ำไม่ได้';
+    const wikiP = water&&water.feats.length ? wikiForPlace(water.feats).catch(()=>[]) : Promise.resolve([]);
+    // 2) ข้อมูล GBIF (ขยายวงถ้าข้อมูลน้อย)
     const steps=[...new Set([keepR,15,30,60].filter(x=>x>=keepR))];
     let all, A, used=keepR;
     for(const r of steps){
-      st.radius=r; used=r; msg(`กำลังค้นแหล่งอาศัยของปลารอบ ${r} กม....`);
+      st.radius=r; used=r; msg(`กำลังค้นข้อมูลปลารอบ ${r} กม. และบทความ Wikipedia...`);
       all=await gbif({facet:'speciesKey',facetLimit:150}); A=facetMap(all);
       if(Object.keys(A).length>=25) break;
     }
     const wm=await gbif({facet:'speciesKey',facetLimit:300,month:win}); const W=facetMap(wm);
     st.radius=keepR;
     let keys=Object.keys(A).sort((x,y)=>A[y]-A[x]).slice(0,120);
-    if(!keys.length){ out.innerHTML='<p>ยังไม่มีข้อมูลปลาในบริเวณนี้ ลองเลือกจุดใกล้แหล่งน้ำมากขึ้น</p>'; return; }
-    // 3) กรองตามแหล่งอาศัย
     msg('กำลังตรวจแหล่งอาศัยของปลาแต่ละชนิด...');
     const habs=await pool(keys,8,habitatOf);
     let rows=keys.map((k,i)=>({k,h:habs[i],total:A[k],w:W[k]||0}));
@@ -360,15 +443,35 @@ async function search(){
     rows.forEach(r=>{ r.idx = r.total>=4 ? (r.w/3)/(r.total/12) : null; r.season = r.w>0 && (r.idx===null || r.idx>=0.8); });
     rows.sort((a,b)=>(b.season-a.season)||(b.total-a.total));
     rows=rows.slice(0,60);
-    msg(`พบ ${rows.length} ชนิด กำลังโหลดชื่อปลา...`);
+    msg(`กำลังโหลดชื่อปลา...`);
     const names=await pool(rows.map(r=>r.k),6,speciesName);
     rows.forEach((r,i)=>r.n=names[i]);
+    const arts=await wikiP;
+
+    // 3) แสดงผล: Wikipedia ก่อน
+    const seasonOf = sci => rows.some(r=>r.season && r.n && sci && (r.n.sci===sci || r.n.sci.startsWith(sci+' ')));
+    let h='';
+    const withFish=arts.filter(a=>a.fish.length);
+    if(withFish.length){
+      h+='<h3 style="font-size:15px;margin-top:0">📖 จาก Wikipedia</h3>';
+      withFish.forEach(a=>{
+        h+=`<div class="fish" style="cursor:default"><div class="n1">${a.place}</div>
+          <div class="muted" style="margin:4px 0 8px">ปลาที่บทความกล่าวถึง (${a.fish.length} ชนิด)</div>
+          <div>${a.fish.map(f=>`<span class="tag ${seasonOf(f[1])?'hot':''}">${f[0]}${f[2]==='s'?' 🌊':f[2]==='b'?' 🌊🏞️':''}${seasonOf(f[1])?' 🔥':''}</span>`).join('')}</div>
+          <div class="muted" style="margin-top:8px">ที่มา: <a href="${a.url}" target="_blank">${a.title} (${a.lang==='th'?'วิกิพีเดียไทย':'Wikipedia EN'})</a></div></div>`;
+      });
+    } else {
+      h+=`<p class="muted">📖 ${arts.length?'บทความ Wikipedia ของแหล่งน้ำแถวนี้ไม่ได้ระบุชนิดปลา':'ไม่พบบทความ Wikipedia ของแหล่งน้ำแถวนี้'} — ดูรายชื่อจากฐานข้อมูลด้านล่างแทน</p>`;
+    }
     const nS=rows.filter(r=>r.season).length;
-    let h=`<p class="muted">${rows.length} ชนิดที่มีแหล่งอาศัยครอบคลุมบริเวณนี้${hab==='fresh'?' (น้ำจืด)':hab==='sea'?' (ทะเล)':''} · ประเมินจากข้อมูลรอบ ${used} กม.
-      ${nS?`<br>🔥 = ช่วง ${TH_M[win[0]-1]}–${TH_M[win[2]-1]} เป็นฤดูที่พบชุก (${nS} ชนิด)`:''}</p>`;
-    h+=rows.map(card).join('');
+    if(rows.length){
+      h+=`<h3 style="font-size:15px;margin-top:16px">🔬 จากฐานข้อมูลวิทยาศาสตร์ (GBIF)</h3>
+        <p class="muted">${rows.length} ชนิดที่มีแหล่งอาศัยครอบคลุมบริเวณนี้${hab==='fresh'?' (น้ำจืด)':hab==='sea'?' (ทะเล)':''} · ประเมินจากข้อมูลรอบ ${used} กม.
+        ${nS?`<br>🔥 = ช่วง ${TH_M[win[0]-1]}–${TH_M[win[2]-1]} เป็นฤดูที่พบชุก`:''}</p>`;
+      h+=rows.map(card).join('');
+    } else if(!withFish.length) h+='<p>ยังไม่มีข้อมูลปลาในบริเวณนี้ ลองเลือกจุดใกล้แหล่งน้ำมากขึ้น</p>';
     out.innerHTML=h;
-    document.querySelectorAll('.fish').forEach(el=>el.onclick=()=>toggle(el, m, used));
+    document.querySelectorAll('.fish[data-k]').forEach(el=>el.onclick=()=>toggle(el, m, used));
   }catch(e){
     out.innerHTML=`<p>โหลดข้อมูลไม่สำเร็จ (${e.message}) — เช็กอินเทอร์เน็ตแล้วลองใหม่</p>`;
   }finally{ st.radius=keepR; $('#goBtn').disabled=false; }
