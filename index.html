@@ -70,7 +70,7 @@ a{color:var(--pri)}
   <div class="row" style="margin-top:8px"><input id="latIn" class="grow" inputmode="decimal" placeholder="ละติจูด เช่น 13.75"><input id="lngIn" class="grow" inputmode="decimal" placeholder="ลองจิจูด เช่น 100.50"><button id="setLL">ตั้งจุด</button></div>
   <div class="loc" id="locTxt">แตะบนแผนที่เพื่อเลือกจุดอื่นได้</div>
   <div style="margin-top:10px">
-    <label>ประเภทแหล่งน้ำ (ตรวจอัตโนมัติจากแผนที่ แก้เองได้)</label>
+    <label>ประเภทแหล่งน้ำ (ตรวจจากแผนที่ในรัศมี แก้เองได้)</label>
     <div class="seg" id="habSeg">
       <button data-h="auto" class="on">🔍 อัตโนมัติ</button><button data-h="fresh">🏞️ น้ำจืด</button><button data-h="sea">🌊 ทะเล</button><button data-h="all">ทั้งหมด</button>
     </div>
@@ -105,7 +105,7 @@ a{color:var(--pri)}
 
 <section class="card note">
   ข้อมูลปลามาจาก <a href="https://www.gbif.org" target="_blank">GBIF</a> (ฐานข้อมูลการพบสิ่งมีชีวิตจริงทั่วโลก จากพิพิธภัณฑ์ งานวิจัย และนักสำรวจ) รายชื่อปลาตามแหล่งน้ำจาก <a href="https://th.wikipedia.org" target="_blank">วิกิพีเดีย</a> · สภาพอากาศจาก <a href="https://open-meteo.com" target="_blank">Open-Meteo</a>.
-  รายชื่อปลาที่สามารถพบเจอได้ ประเมินจากข้อมูลปลาในธรรมชาติรอบจุดที่เลือก (เฉพาะในรัศมีที่เลือกเท่านั้น) แล้วกรองตามประเภทแหล่งน้ำจาก OpenStreetMap ไม่ได้รับประกันว่าวันนั้นจะเจอทุกชนิด
+  รายชื่อปลาเป็นการคาดคะเน จากประเภทแหล่งน้ำในรัศมี (OpenStreetMap) × นิสัยปลาไทยที่นิยมตก × ฤดูกาล (GBIF ทั้งประเทศ) × ข้อมูลการพบจริงในรัศมีและบทความแหล่งน้ำ (Wikipedia) ไม่ได้รับประกันว่าวันนั้นจะเจอ
   ช่วงเวลาตามดวงจันทร์ (Solunar) เป็นค่าประมาณ ±1 ชม.
 </section>
 </main>
@@ -292,81 +292,138 @@ async function speciesName(key){
 async function pool(items, n, fn){ const out=[]; let i=0;
   await Promise.all(Array.from({length:n},async()=>{ while(i<items.length){ const k=i++; out[k]=await fn(items[k]); } })); return out; }
 
-// ---------- แหล่งน้ำรอบจุด (OpenStreetMap) ----------
+// ---------- แหล่งน้ำในรัศมี (OpenStreetMap) ----------
 st.hab='auto';
 document.querySelectorAll('#habSeg button').forEach(b=>b.onclick=()=>{
   document.querySelectorAll('#habSeg button').forEach(x=>x.classList.remove('on'));
   b.classList.add('on'); st.hab=b.dataset.h;
 });
+const WT={R:'แม่น้ำ',C:'คลอง/ลำธาร',D:'เขื่อน/อ่างเก็บน้ำ',P:'บึง/หนอง/บ่อ',E:'ป่าชายเลน/ปากแม่น้ำ',S:'ทะเล/ชายฝั่ง'};
+const WI={R:'🏞️',C:'〰️',D:'🏔️',P:'🪷',E:'🌿',S:'🌊'};
 async function detectWater(){
-  const A=`(around:1500,${st.lat},${st.lng})`, C=`(around:3000,${st.lat},${st.lng})`;
-  const q=`[out:json][timeout:20];(way${A}[waterway~"river|canal|stream"];relation${A}[waterway=river];way${A}[natural=water];relation${A}[natural=water];way${C}[natural=coastline];way${C}[natural~"bay|beach"];relation${C}[natural=bay];);out tags 60;`;
+  const m=Math.round(st.radius*1000), A=`(around:${m},${st.lat},${st.lng})`;
+  const q=`[out:json][timeout:25];(way${A}[waterway~"^(river|canal|stream|drain|ditch)$"];relation${A}[waterway=river];way${A}[natural=water];relation${A}[natural=water];way${A}[landuse=reservoir];way${A}[natural=wetland];way${A}[natural=coastline];way${A}[natural~"^(bay|beach)$"];relation${A}[natural=bay];);out tags 400;`;
   const r=await fetch('https://overpass-api.de/api/interpreter',{method:'POST',body:'data='+encodeURIComponent(q),headers:{'Content-Type':'application/x-www-form-urlencoded'}});
   if(!r.ok) throw new Error('overpass');
   const els=(await r.json()).elements||[];
-  let sea=0, fresh=0; const feats=[], seen=new Set();
-  els.forEach(e=>{const t=e.tags||{};
-    const isSea = t.natural==='coastline'||t.natural==='bay'||t.natural==='beach'||t.water==='lagoon';
-    if(isSea) sea++; else fresh++;
-    const name=t['name:th']||t.name; if(!name||seen.has(name)) return; seen.add(name);
-    const big = t.waterway==='river'||t.water==='reservoir'||t.water==='lake'||t.natural==='bay';
-    feats.push({name, en:t['name:en'], wp:t.wikipedia, wd:t.wikidata, score:(t.wikidata||t.wikipedia?10:0)+(big?5:0)+(e.type==='relation'?2:0)});
+  const cnt={R:0,C:0,D:0,P:0,E:0,S:0}; const feats=[], seen=new Set();
+  els.forEach(e=>{const t=e.tags||{}, nm=t['name:th']||t.name||'';
+    let k=null;
+    if(t.natural==='coastline'||t.natural==='bay'||t.natural==='beach') k='S';
+    else if(t.wetland==='mangrove'||t.water==='lagoon'||t.wetland==='saltmarsh'||t.wetland==='tidalflat') k='E';
+    else if(t.waterway==='river'||t.water==='river') k='R';
+    else if(t.waterway||t.water==='canal'||t.water==='stream') k='C';
+    else if(t.water==='reservoir'||t.landuse==='reservoir'||t.water==='lake'||/เขื่อน|อ่างเก็บน้ำ/.test(nm)) k='D';
+    else if(t.natural==='water'||t.natural==='wetland') k='P';
+    if(!k) return; cnt[k]++;
+    if(!nm||seen.has(nm)) return; seen.add(nm);
+    feats.push({name:nm, wp:t.wikipedia, wd:t.wikidata, k, score:(t.wikidata||t.wikipedia?10:0)+('RDS'.includes(k)?5:0)+(e.type==='relation'?2:0)});
   });
   feats.sort((x,y)=>y.score-x.score);
-  // ทะเลไทย: เดาว่าเป็นอ่าวไทยหรืออันดามัน เพื่อหาบทความ
-  if(sea && st.lat>5 && st.lat<14.5 && st.lng>97 && st.lng<106){
+  if(cnt.S && st.lat>5 && st.lat<14.5 && st.lng>97 && st.lng<106){
     const andaman = st.lng<98.95 || (st.lat<8 && st.lng<100.3);
-    feats.push({name: andaman?'ทะเลอันดามัน':'อ่าวไทย', score:1});
+    feats.push({name: andaman?'ทะเลอันดามัน':'อ่าวไทย', k:'S', score:1});
   }
-  return {type: sea?'sea':fresh?'fresh':null, names:feats.map(f=>f.name).slice(0,5), feats};
+  return {cnt, feats, total:els.length};
+}
+
+// ---------- คลังความรู้ปลาไทยสำหรับนักตกปลา ----------
+// [ชื่อไทย, ชื่อวิทยาศาสตร์, แหล่งน้ำที่ชอบ (R แม่น้ำ C คลอง D เขื่อน/อ่าง P บึง/บ่อ E ป่าชายเลน/ปากแม่น้ำ S ทะเล), ความชุก 1-3, เหยื่อ]
+const FISH=[
+['ปลาช่อน','Channa striata','RCDP',3,'กบยาง, เหยื่อปลอมผิวน้ำ, ปลาเป็น'],
+['ปลาชะโด','Channa micropeltes','RDP',3,'กบยาง, สปินเนอร์, ปลาเป็น'],
+['ปลากระสง','Channa lucius','RCP',2,'ปลาเป็น, เหยื่อปลอมขนาดเล็ก'],
+['ปลาก้าง','Channa limbata','C',1,'ไส้เดือน, กุ้งฝอย'],
+['ปลาดุกด้าน','Clarias batrachus','CP',2,'ไส้เดือน, เหยื่อหมัก'],
+['ปลาดุกอุย','Clarias macrocephalus','CP',2,'ไส้เดือน, เหยื่อหมัก'],
+['ปลาหมอไทย','Anabas testudineus','CP',2,'ไส้เดือน, หนอน'],
+['ปลาหมอเทศ','Oreochromis mossambicus','CPE',2,'ไส้เดือน, รำ'],
+['ปลาหมอคางดำ','Sarotherodon melanotheron','EC',1,'ไส้เดือน, รำ'],
+['ปลาหมอบัตเตอร์','Heterotilapia buttikoferi','DR',1,'ปลาเป็น, เหยื่อปลอม'],
+['ปลานิล','Oreochromis niloticus','RCDP',3,'รำผสมขนมปัง, หัวอาหาร, ไส้เดือน'],
+['ปลาตะเพียนขาว','Barbonymus gonionotus','RCDP',3,'รำ, ข้าวสุก, ขนมปัง, ไส้เดือน'],
+['ปลาตะเพียนทอง','Barbonymus altus','RD',1,'รำ, ข้าวสุก'],
+['ปลากระแห','Barbonymus schwanenfeldii','RD',2,'ข้าวสุก, ผลไม้สุก'],
+['ปลายี่สก','Probarbus jullieni','R',1,'เหยื่อหมัก, หอย'],
+['ปลาเสือตอ','Datnioides pulcher','RD',1,'กุ้งฝอย, ปลาเป็น'],
+['ปลากราย','Chitala ornata','RDP',2,'ปลาเป็น, กุ้ง'],
+['ปลาสลาด','Notopterus notopterus','RCP',2,'ไส้เดือน, กุ้ง'],
+['ปลาสวาย','Pangasianodon hypophthalmus','RD',2,'เหยื่อหมัก, ขนมปัง, หัวอาหาร'],
+['ปลาบึก','Pangasianodon gigas','RD',1,'เหยื่อหมัก'],
+['ปลาเทพา','Pangasius sanitwongsei','R',1,'ปลาเป็น, เครื่องในไก่'],
+['ปลาเทโพ','Pangasius larnaudii','RD',1,'เหยื่อหมัก, ผลไม้'],
+['ปลาเผาะ','Pangasius bocourti','R',1,'เหยื่อหมัก'],
+['ปลาแขยง','Mystus','RCD',3,'ไส้เดือน, กุ้ง'],
+['ปลากดเหลือง','Hemibagrus nemurus','RD',2,'ไส้เดือน, กุ้ง, ปลาเป็น'],
+['ปลากดคัง','Hemibagrus wyckioides','R',1,'ปลาเป็น'],
+['ปลาเค้าขาว','Wallago attu','RD',2,'ปลาเป็น'],
+['ปลาเนื้ออ่อน','Phalacronotus','RD',1,'กุ้ง, ไส้เดือน'],
+['ปลาสร้อยขาว','Henicorhynchus siamensis','RDC',2,'รำ, ไส้เดือน'],
+['ปลาสร้อยนกเขา','Osteochilus','RD',2,'รำ, ไส้เดือน'],
+['ปลากระดี่','Trichopodus trichopterus','CP',2,'ไส้เดือน, หนอน'],
+['ปลาสลิด','Trichopodus pectoralis','CP',1,'ไส้เดือน, รำ'],
+['ปลาซิว','Rasbora','RC',1,'หนอน, ข้าวสุก'],
+['ปลาไหลนา','Monopterus albus','CP',2,'ไส้เดือน'],
+['ปลาหลด','Macrognathus siamensis','RC',1,'ไส้เดือน'],
+['ปลากระทิง','Mastacembelus armatus','RD',1,'ไส้เดือน, กุ้ง'],
+['ปลาบู่ทราย','Oxyeleotris marmorata','RDP',2,'ปลาเป็น, กุ้ง'],
+['ปลาแรด','Osphronemus goramy','RP',1,'ผัก, ผลไม้, ขนมปัง'],
+['ปลากระโห้','Catlocarpio siamensis','RD',1,'เหยื่อหมัก'],
+['ปลาตะโกก','Cyclocheilos enoplos','RD',1,'รำ, ไส้เดือน'],
+['ปลาไน','Cyprinus carpio','DP',2,'รำ, เหยื่อหมัก, ข้าวโพด'],
+['ปลานวลจันทร์เทศ','Cirrhinus cirrhosus','DP',1,'รำ, เหยื่อหมัก'],
+['ปลายี่สกเทศ','Labeo rohita','DP',2,'รำ, เหยื่อหมัก'],
+['ปลาเฉา','Ctenopharyngodon idella','DP',1,'หญ้า, ข้าวโพด'],
+['ปลาหางไหม้','Balantiocheilos melanopterus','R',1,'ข้าวสุก, หนอน'],
+['ปลากระสูบขีด','Hampala macrolepidota','RD',2,'สปูน, เหยื่อปลอม, ปลาเป็น'],
+['ปลากระสูบจุด','Hampala dispar','RD',1,'สปูน, เหยื่อปลอม'],
+['ปลากระมัง','Puntioplites proctozystron','RD',2,'รำ, ข้าวสุก'],
+['ปลาม้า','Boesemania microlepis','R',1,'กุ้ง, ปลาเป็น'],
+['ปลาเสือพ่นน้ำ','Toxotes chatareus','E',1,'แมลง, หนอน'],
+['ปลาตะกรับ','Scatophagus argus','E',2,'กุ้ง, ตะไคร่'],
+['ปลากะพงขาว','Lates calcarifer','ESR',2,'กุ้งเป็น, ปลาเป็น, เหยื่อปลอม'],
+['ปลากะพงแดง','Lutjanus','S',2,'ปลาเป็น, หมึก'],
+['ปลากะพงข้างปาน','Lutjanus russellii','SE',2,'กุ้ง, หมึก'],
+['ปลาเก๋า','Epinephelus','SE',2,'ปลาเป็น, กุ้ง'],
+['ปลาอินทรี','Scomberomorus commerson','S',1,'ปลาเป็น, เหยื่อปลอมลาก'],
+['ปลาโอ','Euthynnus affinis','S',1,'เหยื่อปลอม'],
+['ปลาทู','Rastrelliger brachysoma','S',2,'ซาบิกิ (โซ่เบ็ด)'],
+['ปลาสีกุน','Caranx','S',2,'ซาบิกิ, เหยื่อปลอม'],
+['ปลาข้างเหลือง','Selaroides leptolepis','S',2,'ซาบิกิ'],
+['ปลาสาก','Sphyraena','S',2,'เหยื่อปลอม, ปลาเป็น'],
+['ปลากุเลา','Eleutheronema tetradactylum','SE',1,'กุ้ง'],
+['ปลากระบอก','Mugilidae','ES',2,'ขนมปัง, รำ'],
+['ปลาเห็ดโคน','Sillago sihama','SE',2,'ไส้เดือนทะเล, กุ้ง'],
+['ปลาทรายแดง','Nemipterus','S',2,'หมึก, กุ้ง'],
+['ปลาช่อนทะเล','Rachycentron canadum','S',1,'ปลาเป็น'],
+['ปลากดทะเล','Arius','SE',2,'กุ้ง, หมึก'],
+['ปลาดุกทะเล','Plotosus canius','E',1,'กุ้ง'],
+['ปลาจวด','Johnius','SE',2,'กุ้ง'],
+['ปลาแป้น','Leiognathus','SE',2,'กุ้ง, ไส้เดือนทะเล'],
+['ปลาจะละเม็ด','Pampus','S',1,'กุ้ง'],
+['ปลาวัว','Balistidae','S',1,'หมึก, กุ้ง'],
+['ปลากระเบน','Batoidea','SE',1,'ปลาเป็น, หมึก'],
+];
+const ALIAS=[['ปลาช่อนนา','Channa striata'],['ปลาหมอ','Anabas testudineus'],['ปลาตะเพียน','Barbonymus gonionotus'],['ปลากระพงขาว','Lates calcarifer'],['ปลากะพง','Lates calcarifer'],
+ ['ปลากระพงแดง','Lutjanus'],['ปลาดุก','Clarias batrachus'],['ปลาเค้า','Wallago attu'],['ปลาไหล','Monopterus albus'],['ปลาบู่','Oxyeleotris marmorata'],['ปลากด','Hemibagrus nemurus'],
+ ['ปลาสร้อย','Henicorhynchus siamensis'],['ปลากระสูบ','Hampala macrolepidota'],['ปลาจาระเม็ด','Pampus'],['ปลาจะละเม็ดขาว','Pampus'],['ปลาดุกบิ๊กอุย','Clarias macrocephalus']];
+const BY_SCI={}; FISH.forEach(f=>BY_SCI[f[1]]=f);
+const NAMES=[...FISH.map(f=>[f[0],f[1]]),...ALIAS].sort((a,b)=>b[0].length-a[0].length);
+
+function findFish(text){ // คืนชื่อวิทยาศาสตร์ของปลาที่ข้อความกล่าวถึง
+  const found=new Set(), used=[];
+  const free=(i,j)=>!used.some(([a,b])=>i<b&&j>a);
+  for(const [n,sci] of NAMES){ let i=-1; while((i=text.indexOf(n,i+1))>=0) if(free(i,i+n.length)){ used.push([i,i+n.length]); found.add(sci); } }
+  let i=-1; while((i=text.indexOf('ปลา',i+1))>=0){ // รายชื่อแบบ "ปลาช่อน ชะโด กระสง"
+    const nl=text.indexOf('\n',i); const win=text.slice(i, Math.min(nl<0?text.length:nl, i+250));
+    for(const [n,sci] of NAMES){ const bare=n.slice(3); if(bare.length<3) continue;
+      let k=-1; while((k=win.indexOf(bare,k+1))>=0){ const p=i+k; if(free(p,p+bare.length)){ used.push([p,p+bare.length]); found.add(sci); } } }
+  }
+  FISH.forEach(f=>{ if(f[1].includes(' ') && text.includes(f[1])) found.add(f[1]); });
+  return [...found];
 }
 
 // ---------- Wikipedia ----------
-const FISH=[ // [ชื่อไทย, ชื่อวิทยาศาสตร์, f=น้ำจืด s=ทะเล b=น้ำกร่อย]
-['ปลาช่อน','Channa striata','f'],['ปลาชะโด','Channa micropeltes','f'],['ปลากระสง','Channa lucius','f'],['ปลาก้าง','Channa limbata','f'],
-['ปลาดุกด้าน','Clarias batrachus','f'],['ปลาดุกอุย','Clarias macrocephalus','f'],['ปลาดุกอัฟริกัน','Clarias gariepinus','f'],['ปลาดุก','Clarias','f'],
-['ปลาหมอเทศ','Oreochromis mossambicus','f'],['ปลาหมอคางดำ','Sarotherodon melanotheron','b'],['ปลาหมอบัตเตอร์','Heterotilapia buttikoferi','f'],['ปลาหมอไทย','Anabas testudineus','f'],['ปลาหมอ','Anabas testudineus','f'],
-['ปลานิล','Oreochromis niloticus','f'],['ปลาทับทิม','Oreochromis','f'],
-['ปลาตะเพียนขาว','Barbonymus gonionotus','f'],['ปลาตะเพียนทอง','Barbonymus altus','f'],['ปลาตะเพียน','Barbonymus gonionotus','f'],['ปลากระแห','Barbonymus schwanenfeldii','f'],
-['ปลายี่สกเทศ','Labeo rohita','f'],['ปลายี่สก','Probarbus jullieni','f'],['ปลาเสือตอ','Datnioides','f'],['ปลากราย','Chitala ornata','f'],['ปลาสลาด','Notopterus notopterus','f'],
-['ปลาสวาย','Pangasianodon hypophthalmus','f'],['ปลาบึก','Pangasianodon gigas','f'],['ปลาเทพา','Pangasius sanitwongsei','f'],['ปลาเทโพ','Pangasius larnaudii','f'],['ปลาเผาะ','Pangasius bocourti','f'],
-['ปลาแขยง','Mystus','f'],['ปลากดเหลือง','Hemibagrus nemurus','f'],['ปลากดคัง','Hemibagrus wyckioides','f'],['ปลากด','Hemibagrus','f'],
-['ปลาเค้าขาว','Wallago attu','f'],['ปลาเค้าดำ','Wallago micropogon','f'],['ปลาเค้า','Wallago','f'],['ปลาเนื้ออ่อน','Phalacronotus','f'],
-['ปลาสร้อยขาว','Henicorhynchus siamensis','f'],['ปลาสร้อยนกเขา','Osteochilus','f'],['ปลาสร้อย','Henicorhynchus','f'],
-['ปลากระดี่','Trichopodus trichopterus','f'],['ปลาสลิด','Trichopodus pectoralis','f'],['ปลากัด','Betta splendens','f'],['ปลาซิว','Rasbora','f'],
-['ปลาไหลนา','Monopterus albus','f'],['ปลาไหล','Monopterus albus','f'],['ปลาหลด','Macrognathus siamensis','f'],['ปลากระทิง','Mastacembelus armatus','f'],
-['ปลาบู่ทราย','Oxyeleotris marmorata','f'],['ปลาบู่','Oxyeleotris marmorata','f'],['ปลาแรด','Osphronemus goramy','f'],['ปลากระโห้','Catlocarpio siamensis','f'],
-['ปลาตะโกก','Cyclocheilos enoplos','f'],['ปลาไน','Cyprinus carpio','f'],['ปลานวลจันทร์เทศ','Cirrhinus cirrhosus','f'],['ปลานวลจันทร์','Cirrhinus microlepis','f'],
-['ปลาเฉา','Ctenopharyngodon idella','f'],['ปลาซ่ง','Hypophthalmichthys nobilis','f'],['ปลาลิ่น','Hypophthalmichthys molitrix','f'],['ปลาหางไหม้','Balantiocheilos melanopterus','f'],
-['ปลากระสูบขีด','Hampala macrolepidota','f'],['ปลากระสูบจุด','Hampala dispar','f'],['ปลากระสูบ','Hampala','f'],['ปลากระมัง','Puntioplites proctozystron','f'],
-['ปลาม้า','Boesemania microlepis','f'],['ปลาซักเกอร์','Pterygoplichthys','f'],['ปลาเสือพ่นน้ำ','Toxotes chatareus','b'],['ปลาปักเป้า','Tetraodontidae','b'],
-['ปลากะพงขาว','Lates calcarifer','b'],['ปลากระพงขาว','Lates calcarifer','b'],['ปลากะพงแดง','Lutjanus','s'],['ปลากระพงแดง','Lutjanus','s'],['ปลากะพงข้างปาน','Lutjanus russellii','s'],['ปลากะพง','Lates calcarifer','b'],
-['ปลาเก๋า','Epinephelus','s'],['ปลาอินทรี','Scomberomorus commerson','s'],['ปลาโอ','Euthynnus affinis','s'],['ปลาทู','Rastrelliger brachysoma','s'],['ปลาลัง','Rastrelliger kanagurta','s'],
-['ปลาสีกุน','Carangidae','s'],['ปลาข้างเหลือง','Selaroides leptolepis','s'],['ปลาหางแข็ง','Megalaspis cordyla','s'],['ปลาสาก','Sphyraena','s'],['ปลากุเลา','Eleutheronema tetradactylum','s'],
-['ปลาจะละเม็ดขาว','Pampus argenteus','s'],['ปลาจะละเม็ดดำ','Parastromateus niger','s'],['ปลาจะละเม็ด','Pampus','s'],['ปลาจาระเม็ด','Pampus','s'],
-['ปลากระบอก','Mugilidae','b'],['ปลาเห็ดโคน','Sillago sihama','s'],['ปลาทรายแดง','Nemipterus','s'],['ปลาตาหวาน','Priacanthus','s'],['ปลาสำลี','Seriolina nigrofasciata','s'],
-['ปลาช่อนทะเล','Rachycentron canadum','s'],['ปลากะตัก','Stolephorus','s'],['ปลาหลังเขียว','Sardinella','s'],['ปลากดทะเล','Arius','s'],['ปลาดุกทะเล','Plotosus canius','s'],
-['ปลาตีน','Periophthalmus','b'],['ปลาจวด','Johnius','s'],['ปลาแป้น','Leiognathus','s'],['ปลาวัว','Balistidae','s'],['ปลานกแก้ว','Scaridae','s'],
-['ปลากระเบน','Batoidea','s'],['ปลาฉลาม','Selachimorpha','s'],['ปลาโลมา',null,null]
-].filter(x=>x[1]);
-const FISH_SORTED=[...FISH].sort((a,b)=>b[0].length-a[0].length);
-
-function findFish(text){
-  const found=new Map(), used=[];
-  const free=(i,j)=>!used.some(([a,b])=>i<b&&j>a);
-  const take=(name,i,f)=>{ used.push([i,i+name.length]); if(!found.has(f[0])) found.set(f[0],f); };
-  // 1) ชื่อเต็ม "ปลาxxx"
-  for(const f of FISH_SORTED){ let i=-1; while((i=text.indexOf(f[0],i+1))>=0) if(free(i,i+f[0].length)) take(f[0],i,f); }
-  // 2) ชื่อย่อในประโยครายชื่อปลา เช่น "ปลาช่อน ชะโด กระสง"
-  let i=-1; while((i=text.indexOf('ปลา',i+1))>=0){
-    const end=Math.min(text.length, (text.indexOf('\n',i)+1||text.length+1)-1, i+250); const win=text.slice(i,end);
-    for(const f of FISH_SORTED){ const bare=f[0].slice(3); if(bare.length<3) continue;
-      let k=-1; while((k=win.indexOf(bare,k+1))>=0){ const p=i+k; if(free(p,p+bare.length)) take(bare,p,f); } }
-  }
-  // 3) ชื่อวิทยาศาสตร์ (สำหรับบทความภาษาอังกฤษ)
-  FISH.forEach(f=>{ if(f[1].includes(' ') && text.includes(f[1]) && ![...found.values()].some(x=>x[1]===f[1])) found.set(f[0],f); });
-  const bySci=new Set(); return [...found.values()].filter(f=>!bySci.has(f[1])&&bySci.add(f[1]));
-}
 const wget = u => fetch(u).then(r=>r.json());
 async function wikiExtract(lang,title){
   const j=await wget(`https://${lang}.wikipedia.org/w/api.php?action=query&prop=extracts&explaintext=1&redirects=1&format=json&origin=*&titles=${encodeURIComponent(title)}`);
@@ -380,7 +437,7 @@ async function wikiSearch(lang,q){
 }
 async function wikiForPlace(feats){
   const arts=[], seen=new Set();
-  for(const f of feats.slice(0,3)){
+  for(const f of feats.slice(0,4)){
     const titles={};
     try{
       if(f.wp){ const [l,...t]=f.wp.split(':'); if(l==='th'||l==='en') titles[l]=t.join(':'); }
@@ -397,15 +454,27 @@ async function wikiForPlace(feats){
   return arts;
 }
 
-const profCache={};
-async function habitatOf(key){
-  if(profCache[key]) return profCache[key];
-  const j=await fetch('https://api.gbif.org/v1/species/'+key+'/speciesProfiles').then(r=>r.json()).catch(()=>({results:[]}));
-  const h={fresh:false,sea:false,known:false};
-  (j.results||[]).forEach(p=>{ if(p.freshwater===true){h.fresh=true;h.known=true;} if(p.marine===true){h.sea=true;h.known=true;}
-    const hb=(p.habitat||'').toLowerCase(); if(hb.includes('brackish')){h.fresh=h.sea=h.known=true;} });
-  return profCache[key]=h;
+// ---------- GBIF ตามชื่อปลา ----------
+function gbifName(sci, extra, geo){
+  const p=new URLSearchParams();
+  p.set('scientificName',sci); p.set('limit','0'); p.set('occurrenceStatus','PRESENT');
+  if(geo) p.set('geoDistance',`${st.lat.toFixed(5)},${st.lng.toFixed(5)},${st.radius}km`); else p.set('country','TH');
+  Object.entries(extra).forEach(([k,v])=>[].concat(v).forEach(x=>p.append(k,x)));
+  return fetch('https://api.gbif.org/v1/occurrence/search?'+p).then(r=>{ if(!r.ok) throw new Error('GBIF '+r.status); return r.json(); });
 }
+let seasonCache={}; try{ seasonCache=JSON.parse(localStorage.getItem('fishSeason')||'{}'); }catch(e){}
+async function seasonOf(sci){ // จำนวนบันทึกรายเดือนทั้งประเทศไทย = รูปแบบฤดูกาลของปลาชนิดนี้
+  if(seasonCache[sci]) return seasonCache[sci];
+  const j=await gbifName(sci,{facet:'month',facetLimit:12},false);
+  const F=facetMap(j); const v=Array.from({length:12},(_,i)=>F[i+1]||0);
+  seasonCache[sci]=v; try{ localStorage.setItem('fishSeason',JSON.stringify(seasonCache)); }catch(e){}
+  return v;
+}
+const inRadius = sci => gbifName(sci,{},true).then(j=>j.count||0).catch(()=>0);
+
+const MONTH_TIP = m => [11,12,1].includes(m) ? 'ช่วงน้ำลด อากาศเย็น ปลามักออกหากินช่วงสายถึงบ่ายที่แดดอุ่น และเริ่มลงไปอยู่ในแหล่งน้ำหลัก'
+  : [2,3,4].includes(m) ? 'หน้าแล้ง น้ำน้อย ปลารวมกันอยู่ตามวังน้ำลึกและจุดที่มีร่มเงา ตกเช้ามืดหรือพลบค่ำจะดีกว่า'
+  : 'หน้าน้ำ ปลากระจายตัวและผสมพันธุ์ ลองตกตามชายตลิ่ง ทางน้ำไหลเข้า และพงหญ้าริมน้ำ (ตรวจสอบช่วงห้ามจับปลาฤดูวางไข่ของกรมประมงด้วย)';
 
 async function search(){
   if(!st.hasLoc){ $('#locTxt').textContent='⚠️ กดใช้ GPS หรือแตะเลือกจุดบนแผนที่ก่อน'; return; }
@@ -414,102 +483,88 @@ async function search(){
   const m = new Date($('#dateIn').value+'T12:00:00').getMonth()+1;
   const win=[(m+10)%12+1, m, m%12+1];
   $('#fishCard').style.display='block';
-  $('#fishTitle').textContent='🎣 ปลาที่สามารถพบเจอได้';
+  $('#fishTitle').textContent='🎣 ปลาที่คาดว่าจะพบเจอได้';
   const out=$('#fishOut'); const msg=t=>out.innerHTML=`<div class="muted"><span class="spin"></span> ${t}</div>`;
-  const keepR=st.radius;
   try{
-    // 1) แหล่งน้ำรอบจุด
-    msg('กำลังดูว่าแถวนี้มีแหล่งน้ำอะไร...');
+    // 1) แหล่งน้ำในรัศมี
+    msg(`กำลังสำรวจแหล่งน้ำในรัศมี ${st.radius} กม....`);
     let water=null; try{ water=await detectWater(); }catch(e){}
-    let hab=st.hab;
-    if(hab==='auto') hab=(water&&water.type)||'all';
-    $('#waterTxt').textContent = water ? (water.type ? `ตรวจพบ: ${water.type==='sea'?'🌊 ทะเล/ชายฝั่ง':'🏞️ น้ำจืด'}${water.names.length?' — '+water.names.join(', '):''}` : 'ไม่พบแหล่งน้ำในแผนที่ใกล้จุดนี้') : 'ตรวจแหล่งน้ำไม่ได้';
+    const cnt = water ? water.cnt : {R:0,C:0,D:0,P:0,E:0,S:0};
+    let present = Object.keys(cnt).filter(k=>cnt[k]>0);
+    let assumed=false;
+    if(st.hab==='fresh') present=present.filter(k=>k!=='S');
+    if(st.hab==='sea') present=present.filter(k=>k==='S'||k==='E');
+    if(!present.length){ present = st.hab==='sea' ? ['S'] : ['C','P']; assumed=true; }
+    $('#waterTxt').textContent = water ? (assumed ? 'ไม่พบแหล่งน้ำในแผนที่ — คาดการณ์แบบคลอง/บ่อทั่วไป' : 'ในรัศมีมี: '+present.map(k=>WI[k]+' '+WT[k]).join(' · ')) : 'ตรวจแหล่งน้ำไม่ได้ — คาดการณ์แบบคลอง/บ่อทั่วไป';
     const wikiP = water&&water.feats.length ? wikiForPlace(water.feats).catch(()=>[]) : Promise.resolve([]);
-    // 2) ข้อมูล GBIF (ขยายวงถ้าข้อมูลน้อย)
-    const steps=[keepR]; // ใช้เฉพาะรัศมีที่ผู้ใช้เลือก ไม่ขยายเอง
-    let all, A, used=keepR;
-    for(const r of steps){
-      st.radius=r; used=r; msg(`กำลังค้นข้อมูลปลารอบ ${r} กม. และบทความ Wikipedia...`);
-      all=await gbif({facet:'speciesKey',facetLimit:150}); A=facetMap(all);
-      if(Object.keys(A).length>=25) break;
-    }
-    const wm=await gbif({facet:'speciesKey',facetLimit:300,month:win}); const W=facetMap(wm);
-    st.radius=keepR;
-    let keys=Object.keys(A).sort((x,y)=>A[y]-A[x]).slice(0,120);
-    msg('กำลังคัดปลาที่ตกได้ในแหล่งน้ำแบบนี้...');
-    const habs=await pool(keys,8,habitatOf);
-    let rows=keys.map((k,i)=>({k,h:habs[i],total:A[k],w:W[k]||0}));
-    if(hab!=='all') rows=rows.filter(r=>!r.h.known || (hab==='fresh'?r.h.fresh:r.h.sea));
-    rows.forEach(r=>{ r.idx = r.total>=4 ? (r.w/3)/(r.total/12) : null; r.season = r.w>0 && (r.idx===null || r.idx>=0.8); });
-    rows.sort((a,b)=>(b.season-a.season)||(b.total-a.total));
-    rows=rows.slice(0,60);
-    msg(`กำลังโหลดชื่อปลา...`);
-    const names=await pool(rows.map(r=>r.k),6,speciesName);
-    rows.forEach((r,i)=>r.n=names[i]);
-    const arts=await wikiP;
 
-    // 3) แสดงผล: Wikipedia ก่อน
-    const seasonOf = sci => rows.some(r=>r.season && r.n && sci && (r.n.sci===sci || r.n.sci.startsWith(sci+' ')));
-    let h='';
-    const withFish=arts.filter(a=>a.fish.length);
-    if(withFish.length){
-      h+='<h3 style="font-size:15px;margin-top:0">📖 จาก Wikipedia</h3>';
-      withFish.forEach(a=>{
-        h+=`<div class="fish" style="cursor:default"><div class="n1">${a.place}</div>
-          <div class="muted" style="margin:4px 0 8px">ปลาที่บทความกล่าวถึง (${a.fish.length} ชนิด)</div>
-          <div>${a.fish.map(f=>`<span class="tag ${seasonOf(f[1])?'hot':''}">${f[0]}${f[2]==='s'?' 🌊':f[2]==='b'?' 🌊🏞️':''}${seasonOf(f[1])?' 🔥':''}</span>`).join('')}</div>
-          <div class="muted" style="margin-top:8px">ที่มา: <a href="${a.url}" target="_blank">${a.title} (${a.lang==='th'?'วิกิพีเดียไทย':'Wikipedia EN'})</a></div></div>`;
-      });
-    } else {
-      h+=`<p class="muted">📖 ${arts.length?'บทความ Wikipedia ของแหล่งน้ำแถวนี้ไม่ได้ระบุชนิดปลา':'ไม่พบบทความ Wikipedia ของแหล่งน้ำแถวนี้'} — ดูรายชื่อจากฐานข้อมูลด้านล่างแทน</p>`;
-    }
-    const nS=rows.filter(r=>r.season).length;
-    if(rows.length){
-      h+=`<h3 style="font-size:15px;margin-top:16px">🔬 จากฐานข้อมูลวิทยาศาสตร์ (GBIF)</h3>
-        <p class="muted">${rows.length} ชนิดที่มีโอกาสตกได้${hab==='fresh'?' (น้ำจืด)':hab==='sea'?' (ทะเล)':''} · ในรัศมี ${used} กม.
-        ${nS?`<br>🔥 = ช่วง ${TH_M[win[0]-1]}–${TH_M[win[2]-1]} เป็นฤดูที่พบชุก`:''}</p>`;
-      h+=rows.map(card).join('');
-    } else if(!withFish.length) h+=`<p>ยังไม่มีข้อมูลปลาในรัศมี ${used} กม. — ถ้าต้องการ ลองเลือกรัศมีที่กว้างขึ้นเอง</p>`;
+    // 2) คัดปลาที่แหล่งน้ำในรัศมีเหมาะกับมัน
+    let cands = FISH.map(f=>({f, match:[...f[2]].filter(k=>present.includes(k))})).filter(c=>c.match.length);
+    msg(`กำลังคาดคะเนจาก ${cands.length} ชนิดที่อยู่ในแหล่งน้ำแบบนี้ได้...`);
+    const [arts] = await Promise.all([wikiP, pool(cands,8,async c=>{
+      const [sv, rec] = await Promise.all([seasonOf(c.f[1]).catch(()=>null), inRadius(c.f[1])]);
+      c.sv=sv; c.rec=rec;
+    })]);
+    const wikiSci=new Set(); arts.forEach(a=>a.fish.forEach(s=>wikiSci.add(s)));
+    // ปลาที่ Wikipedia ระบุว่าอยู่ในแหล่งน้ำแถวนี้ แม้ประเภทแหล่งน้ำไม่ตรง ก็ให้เข้ามาด้วย
+    for(const s of wikiSci) if(BY_SCI[s] && !cands.some(c=>c.f[1]===s)){ const c={f:BY_SCI[s],match:[]}; c.sv=await seasonOf(s).catch(()=>null); c.rec=await inRadius(s); cands.push(c); }
+
+    // 3) คะแนน
+    const W={1:1.5,2:3,3:4.5};
+    cands.forEach(c=>{
+      let sf=1, tot=0;
+      if(c.sv){ tot=c.sv.reduce((a,b)=>a+b,0); if(tot>=20){ const w=win.reduce((a,mm)=>a+c.sv[mm-1],0)/tot; sf=Math.max(0.6,Math.min(1.4, w/0.25)); } }
+      c.sf=sf; c.wiki=wikiSci.has(c.f[1]);
+      c.score = W[c.f[3]] * (1+0.3*Math.min(c.match.length,3)) * sf + (c.rec?1.5:0) + (c.wiki?2:0);
+      c.level = c.score>=5.5?3 : c.score>=3?2 : 1;
+    });
+    cands.sort((a,b)=>b.score-a.score);
+
+    // 4) แสดงผล
+    let h=`<p class="muted">คาดคะเนจากแหล่งน้ำในรัศมี ${st.radius} กม. ร่วมกับนิสัยของปลา ฤดูกาลเดือน${TH_MF[m-1]} และข้อมูลการพบจริง</p>
+      <div class="note" style="background:#eef6f7;padding:10px;border-radius:10px;margin-bottom:10px">💡 ${MONTH_TIP(m)}</div>`;
+    const lv={3:'🟢 โอกาสเจอสูง',2:'🟡 โอกาสเจอปานกลาง',1:'⚪ โอกาสเจอน้อย'};
+    [3,2,1].forEach(L=>{ const g=cands.filter(c=>c.level===L); if(!g.length) return;
+      h+=`<h3 style="font-size:15px;margin:14px 0 8px">${lv[L]} (${g.length})</h3>`+g.map(c=>card(c,m)).join(''); });
+    if(arts.length) h+='<p class="muted" style="margin-top:12px">📖 อ้างอิงแหล่งน้ำ: '+arts.map(a=>`<a href="${a.url}" target="_blank">${a.title}</a>`).join(', ')+'</p>';
     out.innerHTML=h;
-    document.querySelectorAll('.fish[data-k]').forEach(el=>el.onclick=()=>toggle(el, m, used));
+    document.querySelectorAll('.fish[data-sci]').forEach(el=>el.onclick=()=>toggle(el,m));
   }catch(e){
     out.innerHTML=`<p>โหลดข้อมูลไม่สำเร็จ (${e.message}) — เช็กอินเทอร์เน็ตแล้วลองใหม่</p>`;
-  }finally{ st.radius=keepR; $('#goBtn').disabled=false; }
+  }finally{ $('#goBtn').disabled=false; }
 }
 
-function card(r){
-  const n=r.n||{sci:r.k};
-  const title = n.th || n.en || n.sci;
-  let tags='';
-  if(r.h.fresh) tags+='<span class="tag">🏞️ น้ำจืด</span>';
-  if(r.h.sea) tags+='<span class="tag">🌊 ทะเล</span>';
-  if(r.season) tags+='<span class="tag hot">🔥 ช่วงนี้</span>';
-  return `<div class="fish" data-k="${r.k}" data-sci="${n.sci}">
-    <div class="n1">${title}</div>
-    <div class="n2">${n.sci}${n.th&&n.en?' · '+n.en:''}${n.family?' · วงศ์ '+n.family:''}</div>
-    ${tags?`<div style="margin-top:6px">${tags}</div>`:''}
+function card(c,m){
+  const f=c.f;
+  let tags=c.match.map(k=>`<span class="tag">${WI[k]} ${WT[k]}</span>`).join('');
+  if(c.wiki) tags+='<span class="tag hot">📖 Wikipedia ระบุ</span>';
+  if(c.rec) tags+=`<span class="tag hot">📍 เคยพบจริงในรัศมี</span>`;
+  if(c.sf>=1.2) tags+='<span class="tag hot">🔥 ฤดูนี้ชุก</span>';
+  else if(c.sf<=0.75) tags+='<span class="tag low">💤 นอกฤดู</span>';
+  return `<div class="fish" data-sci="${f[1]}">
+    <div class="n1">${f[0]}</div>
+    <div class="n2">${f[1]}</div>
+    <div style="margin-top:6px">${tags}</div>
+    <div class="muted" style="margin-top:6px">🪝 เหยื่อ: ${f[4]}</div>
     <div class="detail"></div></div>`;
 }
 
-async function toggle(el, m, used){
+async function toggle(el, m){
   el.classList.toggle('open');
   const d=el.querySelector('.detail');
   if(!el.classList.contains('open')||d.dataset.done) return;
   d.innerHTML='<span class="spin"></span>';
+  const sci=el.dataset.sci;
   try{
-    const keepR=st.radius; st.radius=used||keepR;
-    let j; try{ j=await gbif({speciesKey:el.dataset.k,facet:'month',facetLimit:12}); } finally { st.radius=keepR; }
-    const F=facetMap(j); const vals=Array.from({length:12},(_,i)=>F[i+1]||0); const mx=Math.max(1,...vals);
+    const vals=await seasonOf(sci); const mx=Math.max(1,...vals);
     const best=vals.map((v,i)=>[v,i]).filter(x=>x[0]>0).sort((a,b)=>b[0]-a[0]).slice(0,3).map(x=>TH_M[x[1]]);
-    const sci=el.dataset.sci;
-    d.innerHTML=`<div class="muted">ฤดูกาลที่พบในบริเวณนี้ (ยิ่งสูง ยิ่งพบบ่อย)</div>
+    const fb = sci.includes(' ') ? `<a href="https://www.fishbase.se/summary/${sci.replace(/ /g,'-')}.html" target="_blank">FishBase (นิสัย/อาหาร)</a> · ` : '';
+    d.innerHTML=`<div class="muted">ฤดูกาลที่พบในประเทศไทย (ยิ่งสูง ยิ่งพบบ่อย)</div>
       <div class="bars">${vals.map((v,i)=>`<div class="${i===m-1?'cur':''}" style="height:${v/mx*100}%" title="${v}"></div>`).join('')}</div>
       <div class="blabels">${TH_M.map(x=>`<span>${x.replace('.','').slice(0,2)}</span>`).join('')}</div>
-      ${best.length?`<p class="muted">เดือนที่พบบ่อยสุด: <b>${best.join(', ')}</b></p>`:''}
-      <div class="row" style="margin-top:6px">
-        <a href="https://www.fishbase.se/summary/${sci.replace(/ /g,'-')}.html" target="_blank">FishBase (รูป/นิสัย/เหยื่อ)</a> ·
-        <a href="https://www.gbif.org/species/${el.dataset.k}" target="_blank">GBIF</a> ·
-        <a href="https://www.google.com/search?tbm=isch&q=${encodeURIComponent(sci)}" target="_blank">ดูรูป</a>
+      ${best.length?`<p class="muted">เดือนที่พบบ่อยสุด: <b>${best.join(', ')}</b></p>`:'<p class="muted">ยังมีข้อมูลรายเดือนไม่พอ</p>'}
+      <div class="row" style="margin-top:6px">${fb}
+        <a href="https://www.google.com/search?tbm=isch&q=${encodeURIComponent(el.querySelector('.n1').textContent)}" target="_blank">ดูรูป</a>
       </div>`;
     d.dataset.done=1;
   }catch(e){ d.textContent='โหลดไม่สำเร็จ'; }
