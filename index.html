@@ -105,7 +105,7 @@ a{color:var(--pri)}
 
 <section class="card note">
   ข้อมูลปลามาจาก <a href="https://www.gbif.org" target="_blank">GBIF</a> (ฐานข้อมูลการพบสิ่งมีชีวิตจริงทั่วโลก จากพิพิธภัณฑ์ งานวิจัย และนักสำรวจ) รายชื่อปลาตามแหล่งน้ำจาก <a href="https://th.wikipedia.org" target="_blank">วิกิพีเดีย</a> · สภาพอากาศจาก <a href="https://open-meteo.com" target="_blank">Open-Meteo</a>.
-  รายชื่อปลาประเมินจากแหล่งอาศัยตามธรรมชาติรอบจุดที่เลือก (ถ้าข้อมูลในรัศมีที่เลือกน้อย แอปจะขยายวงให้อัตโนมัติ) แล้วกรองตามประเภทแหล่งน้ำจาก OpenStreetMap ไม่ได้รับประกันว่าวันนั้นจะเจอทุกชนิด
+  รายชื่อปลาประเมินจากแหล่งอาศัยตามธรรมชาติรอบจุดที่เลือก (เฉพาะในรัศมีที่เลือกเท่านั้น) แล้วกรองตามประเภทแหล่งน้ำจาก OpenStreetMap ไม่ได้รับประกันว่าวันนั้นจะเจอทุกชนิด
   ช่วงเวลาตามดวงจันทร์ (Solunar) เป็นค่าประมาณ ±1 ชม.
 </section>
 </main>
@@ -426,7 +426,7 @@ async function search(){
     $('#waterTxt').textContent = water ? (water.type ? `ตรวจพบ: ${water.type==='sea'?'🌊 ทะเล/ชายฝั่ง':'🏞️ น้ำจืด'}${water.names.length?' — '+water.names.join(', '):''}` : 'ไม่พบแหล่งน้ำในแผนที่ใกล้จุดนี้') : 'ตรวจแหล่งน้ำไม่ได้';
     const wikiP = water&&water.feats.length ? wikiForPlace(water.feats).catch(()=>[]) : Promise.resolve([]);
     // 2) ข้อมูล GBIF (ขยายวงถ้าข้อมูลน้อย)
-    const steps=[...new Set([keepR,15,30,60].filter(x=>x>=keepR))];
+    const steps=[keepR]; // ใช้เฉพาะรัศมีที่ผู้ใช้เลือก ไม่ขยายเอง
     let all, A, used=keepR;
     for(const r of steps){
       st.radius=r; used=r; msg(`กำลังค้นข้อมูลปลารอบ ${r} กม. และบทความ Wikipedia...`);
@@ -466,10 +466,10 @@ async function search(){
     const nS=rows.filter(r=>r.season).length;
     if(rows.length){
       h+=`<h3 style="font-size:15px;margin-top:16px">🔬 จากฐานข้อมูลวิทยาศาสตร์ (GBIF)</h3>
-        <p class="muted">${rows.length} ชนิดที่มีแหล่งอาศัยครอบคลุมบริเวณนี้${hab==='fresh'?' (น้ำจืด)':hab==='sea'?' (ทะเล)':''} · ประเมินจากข้อมูลรอบ ${used} กม.
+        <p class="muted">${rows.length} ชนิดที่มีแหล่งอาศัยครอบคลุมบริเวณนี้${hab==='fresh'?' (น้ำจืด)':hab==='sea'?' (ทะเล)':''} · ในรัศมี ${used} กม.
         ${nS?`<br>🔥 = ช่วง ${TH_M[win[0]-1]}–${TH_M[win[2]-1]} เป็นฤดูที่พบชุก`:''}</p>`;
       h+=rows.map(card).join('');
-    } else if(!withFish.length) h+='<p>ยังไม่มีข้อมูลปลาในบริเวณนี้ ลองเลือกจุดใกล้แหล่งน้ำมากขึ้น</p>';
+    } else if(!withFish.length) h+=`<p>ยังไม่มีข้อมูลปลาในรัศมี ${used} กม. — ถ้าต้องการ ลองเลือกรัศมีที่กว้างขึ้นเอง</p>`;
     out.innerHTML=h;
     document.querySelectorAll('.fish[data-k]').forEach(el=>el.onclick=()=>toggle(el, m, used));
   }catch(e){
