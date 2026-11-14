@@ -406,6 +406,42 @@ const FISH=[
 ['ปลาวัว','Balistidae','S',1,'หมึก, กุ้ง'],
 ['ปลากระเบน','Batoidea','SE',1,'ปลาเป็น, หมึก'],
 ];
+// เหยื่อปลอมที่เหมาะกับปลาแต่ละชนิด (ไม่มีในรายการ = ไม่นิยมใช้เหยื่อปลอม)
+const LURE={
+'Channa striata':'กบยาง, ปลั๊กผิวน้ำ/ป็อปเปอร์, สปินเนอร์เบท',
+'Channa micropeltes':'กบยาง, ปลั๊กผิวน้ำ, ปลั๊กดำ, สปินเนอร์, สปูน',
+'Channa lucius':'สปินเนอร์เล็ก, ปลั๊กจิ๋ว, กบยางเล็ก',
+'Channa limbata':'สปินเนอร์จิ๋ว, ปลั๊กจิ๋ว (UL)',
+'Anabas testudineus':'สปินเนอร์จิ๋ว (ได้บ้าง)',
+'Heterotilapia buttikoferi':'สปินเนอร์, ปลั๊กตื้น, เหยื่อยาง',
+'Oreochromis niloticus':'ไมโครจิ๊ก, สปินเนอร์จิ๋ว (ได้บ้าง)',
+'Barbonymus schwanenfeldii':'สปินเนอร์จิ๋ว, สปูนเล็ก',
+'Datnioides pulcher':'ปลั๊กเล็ก, เหยื่อยางรูปกุ้ง',
+'Chitala ornata':'ปลั๊กดำกลางน้ำ (กินไม่บ่อย)',
+'Hemibagrus nemurus':'เหยื่อยางหนอน/กุ้ง, ปลั๊กดำลึก',
+'Hemibagrus wyckioides':'ปลั๊กดำลึก, สปูนหนัก',
+'Wallago attu':'ปลั๊กดำลึก, สปูน, สปินเนอร์',
+'Oxyeleotris marmorata':'ปลั๊กดำ (ลากช้า), เหยื่อยาง, กบยางเล็ก',
+'Hampala macrolepidota':'สปูน, สปินเนอร์, ปลั๊กมินนาว',
+'Hampala dispar':'สปูนเล็ก, สปินเนอร์',
+'Boesemania microlepis':'ปลั๊กดำลึก, เหยื่อยางรูปกุ้ง',
+'Toxotes chatareus':'แมลงปลอม/ฟลาย (ได้บ้าง)',
+'Lates calcarifer':'ปลั๊กมินนาว, ป็อปเปอร์, ไบเบรชั่น, เหยื่อยางปลา/กุ้ง',
+'Lutjanus':'ไมโครจิ๊ก/สโลว์จิ๊ก, เหยื่อยาง, ปลั๊กดำ',
+'Lutjanus russellii':'ไมโครจิ๊ก, เหยื่อยางรูปกุ้ง, ปลั๊กดำเล็ก',
+'Epinephelus':'สโลว์จิ๊ก, เหยื่อยาง, ปลั๊กดำลึก',
+'Scomberomorus commerson':'ปลั๊กลาก (ทรอลลิ่ง), เมทัลจิ๊ก, ป็อปเปอร์',
+'Euthynnus affinis':'เมทัลจิ๊ก, ปลั๊กลาก, ป็อปเปอร์',
+'Rastrelliger brachysoma':'ซาบิกิ',
+'Caranx':'ป็อปเปอร์, เมทัลจิ๊ก, ไมโครจิ๊ก',
+'Selaroides leptolepis':'ซาบิกิ',
+'Sphyraena':'ปลั๊กมินนาว, เมทัลจิ๊ก, สปูน',
+'Eleutheronema tetradactylum':'เหยื่อยางรูปกุ้ง, ปลั๊กดำตื้น',
+'Sillago sihama':'ไมโครจิ๊ก (ได้บ้าง)',
+'Nemipterus':'ไมโครจิ๊ก, ซาบิกิ',
+'Rachycentron canadum':'เมทัลจิ๊ก, ป็อปเปอร์, บั๊กเทล',
+'Leiognathus':'ซาบิกิ',
+};
 const ALIAS=[['ปลาช่อนนา','Channa striata'],['ปลาหมอ','Anabas testudineus'],['ปลาตะเพียน','Barbonymus gonionotus'],['ปลากระพงขาว','Lates calcarifer'],['ปลากะพง','Lates calcarifer'],
  ['ปลากระพงแดง','Lutjanus'],['ปลาดุก','Clarias batrachus'],['ปลาเค้า','Wallago attu'],['ปลาไหล','Monopterus albus'],['ปลาบู่','Oxyeleotris marmorata'],['ปลากด','Hemibagrus nemurus'],
  ['ปลาสร้อย','Henicorhynchus siamensis'],['ปลากระสูบ','Hampala macrolepidota'],['ปลาจาระเม็ด','Pampus'],['ปลาจะละเม็ดขาว','Pampus'],['ปลาดุกบิ๊กอุย','Clarias macrocephalus']];
@@ -570,7 +606,8 @@ function card(c,m){
         <div class="n1">${f[0]}</div>
         <div class="n2">${f[1]}</div>
         <div style="margin-top:6px">${tags}</div>
-        <div class="muted" style="margin-top:6px">🪝 เหยื่อ: ${f[4]}</div>
+        <div class="muted" style="margin-top:6px">🪝 เหยื่อสด: ${f[4]}</div>
+        <div class="muted" style="margin-top:3px">🎯 เหยื่อปลอม: ${LURE[f[1]]?`<b style="color:var(--pri2)">${LURE[f[1]]}</b>`:'ไม่นิยม — ใช้เหยื่อสดดีกว่า'}</div>
       </div>
     </div>
     <div class="detail"></div></div>`;
