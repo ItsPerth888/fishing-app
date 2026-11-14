@@ -531,6 +531,37 @@ const MONTH_TIP = m => [11,12,1].includes(m) ? 'ช่วงน้ำลด อ�
   : [2,3,4].includes(m) ? 'หน้าแล้ง น้ำน้อย ปลารวมกันอยู่ตามวังน้ำลึกและจุดที่มีร่มเงา ตกเช้ามืดหรือพลบค่ำจะดีกว่า'
   : 'หน้าน้ำ ปลากระจายตัวและผสมพันธุ์ ลองตกตามชายตลิ่ง ทางน้ำไหลเข้า และพงหญ้าริมน้ำ (ตรวจสอบช่วงห้ามจับปลาฤดูวางไข่ของกรมประมงด้วย)';
 
+// ---------- แนะนำเหยื่อปลอมสำหรับจุดนี้ ----------
+const LURE_TYPES=[
+ {k:'กบยาง',re:/กบยาง/,top:1,how:'ตีเข้าพงหญ้า สาหร่าย หรือบัว แล้วกระตุกเป็นจังหวะ'},
+ {k:'ปลั๊กผิวน้ำ / ป็อปเปอร์',re:/ผิวน้ำ|ป็อปเปอร์/,top:1,how:'ตีตามขอบตลิ่ง ลากให้เกิดเสียงและฟองบนผิวน้ำ'},
+ {k:'ปลั๊กดำ / มินนาว',re:/ปลั๊กดำ|มินนาว|ปลั๊กเล็ก|ปลั๊กจิ๋ว|ปลั๊กตื้น/,deep:1,how:'ลากผ่านโครงสร้างใต้น้ำ เช่น ตอไม้ กองหิน แล้วหยุดเป็นช่วง ๆ'},
+ {k:'สปินเนอร์',re:/สปินเนอร์/,how:'ลากสม่ำเสมอ ใช้ได้ทั้งน้ำใสและน้ำขุ่น'},
+ {k:'สปูน',re:/สปูน/,deep:1,how:'ตีไกลแล้วปล่อยให้จม จากนั้นลากสลับกับหยุด'},
+ {k:'เหยื่อยาง',re:/เหยื่อยาง/,deep:1,how:'ปล่อยลงพื้นแล้วลากช้า ๆ สลับกับยกคันเบา ๆ'},
+ {k:'จิ๊ก (ไมโคร/สโลว์/เมทัล)',re:/จิ๊ก/,deep:1,how:'ปล่อยลงพื้นแล้วกระตุกขึ้นลง ใช้ได้ดีในน้ำลึก'},
+ {k:'ไบเบรชั่น',re:/ไบเบรชั่น/,deep:1,how:'ลากเร็ว ให้เหยื่อสั่นเรียกปลาในน้ำขุ่น'},
+ {k:'ซาบิกิ (โซ่เบ็ด)',re:/ซาบิกิ/,how:'ปล่อยลงตามฝูงปลาแล้วกระตุกเบา ๆ'},
+ {k:'ปลั๊กลาก (ทรอลลิ่ง)',re:/ปลั๊กลาก|ทรอลลิ่ง/,how:'ใช้ลากหลังเรือที่กำลังวิ่ง'},
+];
+function lureAdvice(cands, timeInfo, t){
+  const h=t.getHours();
+  const golden = timeInfo.list.some(w=>!w.solunar && t>=w.a && t<=w.b);
+  const midday = h>=10 && h<15;
+  const night = t<timeInfo.sun.rise || t>timeInfo.sun.set;
+  const res=LURE_TYPES.map(L=>{
+    const fish=cands.filter(c=>c.level>=2 && LURE[c.f[1]] && L.re.test(LURE[c.f[1]]));
+    let sc=fish.reduce((a,c)=>a+c.score,0);
+    if(golden && L.top) sc*=1.5; if(midday && L.deep) sc*=1.3; if(midday && L.top) sc*=0.7;
+    return {L, fish, sc};
+  }).filter(r=>r.fish.length).sort((a,b)=>b.sc-a.sc).slice(0,3);
+  const when = golden ? '🌅 ตอนนี้เป็นช่วงรุ่งเช้า/พลบค่ำ ปลาล่าเหยื่อมักขึ้นมาไล่เหยื่อใกล้ผิวน้ำ เหยื่อผิวน้ำมักได้ผลดี'
+    : midday ? '☀️ ช่วงกลางวันแดดแรง ปลามักลงไปอยู่ในน้ำลึกหรือที่ร่ม ลองใช้เหยื่อที่ดำลงลึกแล้วตีเข้าที่ร่มเงา'
+    : night ? '🌙 ช่วงกลางคืน ใช้เหยื่อที่มีเสียงหรือสั่นมาก ๆ และลากให้ช้าลง'
+    : '⏱️ ช่วงเวลาปกติ ลองสลับระหว่างเหยื่อผิวน้ำกับเหยื่อดำลึก เพื่อหาระดับน้ำที่ปลาอยู่';
+  return {res, when};
+}
+
 async function search(){
   if(!st.hasLoc){ $('#locTxt').textContent='⚠️ กดใช้ GPS หรือแตะเลือกจุดบนแผนที่ก่อน'; return; }
   $('#goBtn').disabled=true;
@@ -580,6 +611,21 @@ async function search(){
     // 4) แสดงผล
     let h=`<p class="muted">คาดคะเนจากแหล่งน้ำในรัศมี ${st.radius} กม. ร่วมกับนิสัยของปลา ฤดูกาลเดือน${TH_MF[m-1]} และข้อมูลการพบจริง</p>
       <div class="note" style="background:#eef6f7;padding:10px;border-radius:10px;margin-bottom:10px">💡 ${MONTH_TIP(m)}</div>`;
+    // กล่องแนะนำเหยื่อปลอม
+    const dateStr=$('#dateIn').value, tm=new Date(dateStr+'T'+($('#timeIn').value||'06:00')+':00');
+    const adv=lureAdvice(cands, windowsFor(dateStr,st.lat,st.lng), tm);
+    if(adv.res.length){
+      h+=`<div style="border:2px solid var(--pri);border-radius:14px;padding:12px;margin-bottom:12px">
+        <div style="font-weight:700;font-size:16px;margin-bottom:4px">🎯 แนะนำเหยื่อปลอมสำหรับจุดนี้</div>
+        <div class="muted" style="margin-bottom:8px">${adv.when}</div>
+        ${adv.res.map((r,i)=>`<div style="padding:8px 0;${i?'border-top:1px dashed var(--line)':''}">
+          <div><b>${i+1}. ${r.L.k}</b></div>
+          <div class="muted">เป้าหมาย: ${r.fish.sort((a,b)=>b.score-a.score).slice(0,4).map(c=>c.f[0]).join(', ')}</div>
+          <div class="muted">วิธีใช้: ${r.L.how}</div></div>`).join('')}
+      </div>`;
+    } else {
+      h+=`<div class="note" style="border:1px dashed var(--line);padding:10px;border-radius:10px;margin-bottom:10px">🎯 ปลาที่มีโอกาสเจอแถวนี้ส่วนใหญ่ไม่นิยมตกด้วยเหยื่อปลอม แนะนำใช้เหยื่อสดดีกว่า</div>`;
+    }
     const lv={3:'🟢 โอกาสเจอสูง',2:'🟡 โอกาสเจอปานกลาง',1:'⚪ โอกาสเจอน้อย'};
     [3,2,1].forEach(L=>{ const g=cands.filter(c=>c.level===L); if(!g.length) return;
       h+=`<h3 style="font-size:15px;margin:14px 0 8px">${lv[L]} (${g.length})</h3>`+g.map(c=>card(c,m)).join(''); });
