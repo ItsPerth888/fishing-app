@@ -1,16 +1,28 @@
-class Elasmobranchii -> 121
-class Holocephali -> 120
-class Petromyzonti -> 11881065
+class 212 Aves 6027040
+class 11592253 Squamata 69731
+class 359 Mammalia 48107
+class 131 Amphibia 38274
+class 11418114 Testudines 4525
+class 121 Elasmobranchii 2302
+class 11493978 Crocodylia 234
+class 356 Ascidiacea 60
+class 120 Holocephali 8
+class 7375758 Leptocardii 7
+class 119 Myxini 4
+class 207 Thaliacea 2
+class 11500725 Dipneusti 1
+class 11733052 Coelacanthi 1
+fish classes: ['121', '120', '119']
 GBIF taxon 121 offset 0 -> 151
 GBIF taxon 120 offset 0 -> 2
-GBIF taxon 11881065 offset 0 -> 0
-GBIF species total: 153
-species with names: 153
-retry thbif errors: 26
-thbif: {'ok': 127, 'err': 26, 'named': 119}
+GBIF taxon 119 offset 0 -> 2
+GBIF species total: 155
+species with names: 155
+retry thbif errors: 27
+thbif: {'ok': 128, 'err': 27, 'named': 120}
 sample ('Taeniura lymma', ['ปลากระเบนทอง', 'กระเบนทอง', 'กระเบนหิน', 'กระเบนหางพัดจุดฟ้า', 'ปลากระเบนหิน', 'ปลากระเบนหางพัดจุดฟ้า'], [])
 sample ('Carcharhinus melanopterus', ['ฉลามหูดำ', 'ฉลามครีบดำ', 'ปลาฉลามหูดำ', 'ปลาฉลามครีบดำ'], [])
 sample ('Carcharhinus sorrah', ['ฉลามหูดำ', 'ฉลามหนูหัวแหลม', 'ปลาฉลามหูดำ', 'ฉลามครีบดำ', 'ฉลามจุดดำ', 'ปลาฉลามครีบดำ', 'ปลาฉลามหนูหัวแหลม', 'ปลาฉลามจุดดำ', 'ปลาฉลามหางจุด'], [])
-no Thai name from thbif: 34 -> wikidata
+no Thai name from thbif: 35 -> wikidata
 filled from wiki: 5
-with Thai name: 124 of 153 | time 309s
+with Thai name: 125 of 155 | time 327s
