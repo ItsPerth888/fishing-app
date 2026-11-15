@@ -25,18 +25,21 @@ def get(url, tries=3, timeout=30):
 # ---------- 1) GBIF: ปลาที่มีบันทึกในไทย ----------
 def gbif_species():
     keys = {}
-    # หา "ชั้น" (class) ของปลาทั้งหมดที่มีบันทึกในไทย จากไฟลัม Chordata
+    # หา "อันดับ" (order) ของปลาทั้งหมดที่มีบันทึกในไทย (GBIF ใหม่ ปลากระดูกแข็งอาจไม่มี class)
     taxa = []
-    FISHY = re.compile(r'Actinopter|Teleostei|Elasmobranch|Holocephal|Chondrichthy|Sarcopteryg|Petromyzon|Myxini|Cephalaspidomorph', re.I)
-    j = json.loads(get('https://api.gbif.org/v1/occurrence/search?country=TH&taxonKey=44&limit=0&facet=classKey&facetLimit=100'))
+    FISHY = re.compile(r'Actinopter|Teleostei|Elasmobranch|Holocephal|Chondrichthy|Sarcopteryg|Petromyzon|Myxini|Cephalaspidomorph|Dipnoi|Dipneusti', re.I)
+    TETRA = re.compile(r'Aves|Mammalia|Amphibia|Squamata|Testudines|Crocodylia|Reptilia|Ascidiacea|Thaliacea|Leptocardii|Appendicularia', re.I)
+    j = json.loads(get('https://api.gbif.org/v1/occurrence/search?country=TH&taxonKey=44&limit=0&facet=orderKey&facetLimit=400'))
     for c in (j.get('facets') or [{}])[0].get('counts', []):
         try:
-            nm = json.loads(get('https://api.gbif.org/v1/species/' + c['name'])).get('canonicalName', '')
+            d = json.loads(get('https://api.gbif.org/v1/species/' + c['name']))
         except Exception:
-            nm = ''
-        log('class', c['name'], nm, c['count'])
-        if FISHY.search(nm or ''): taxa.append(c['name'])
-    log('fish classes:', taxa)
+            continue
+        cls = d.get('class') or ''
+        keep = bool(FISHY.search(cls)) or (not cls and not TETRA.search(json.dumps(d.get('higherClassificationMap', {}))))
+        if keep:
+            taxa.append(c['name']); log('fish order', d.get('canonicalName'), '| class:', cls or '-', '|', c['count'])
+    log('fish orders:', len(taxa))
     for taxon in taxa:
         off = 0
         while True:
