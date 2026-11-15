@@ -1,0 +1,16 @@
+class Elasmobranchii -> 121
+class Holocephali -> 120
+class Petromyzonti -> 11881065
+GBIF taxon 121 offset 0 -> 151
+GBIF taxon 120 offset 0 -> 2
+GBIF taxon 11881065 offset 0 -> 0
+GBIF species total: 153
+species with names: 153
+retry thbif errors: 26
+thbif: {'ok': 127, 'err': 26, 'named': 119}
+sample ('Taeniura lymma', ['ปลากระเบนทอง', 'กระเบนทอง', 'กระเบนหิน', 'กระเบนหางพัดจุดฟ้า', 'ปลากระเบนหิน', 'ปลากระเบนหางพัดจุดฟ้า'], [])
+sample ('Carcharhinus melanopterus', ['ฉลามหูดำ', 'ฉลามครีบดำ', 'ปลาฉลามหูดำ', 'ปลาฉลามครีบดำ'], [])
+sample ('Carcharhinus sorrah', ['ฉลามหูดำ', 'ฉลามหนูหัวแหลม', 'ปลาฉลามหูดำ', 'ฉลามครีบดำ', 'ฉลามจุดดำ', 'ปลาฉลามครีบดำ', 'ปลาฉลามหนูหัวแหลม', 'ปลาฉลามจุดดำ', 'ปลาฉลามหางจุด'], [])
+no Thai name from thbif: 34 -> wikidata
+filled from wiki: 5
+with Thai name: 124 of 153 | time 309s
