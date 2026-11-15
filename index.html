@@ -1041,13 +1041,15 @@ async function showWildFish(o){
   const box=$('#fsOut'); box.innerHTML='<span class="spin"></span>';
   if(!o.img){ await fishImages([o.sci]); o.img=imgCache[o.sci]; }
   let hab={fresh:false,sea:false,known:false}; try{ if(o.key) hab=await habitatOf(o.key); }catch(e){}
-  let thCount=null; try{ thCount=(await gbifName(o.sci,{},false)).count; }catch(e){}
+  let thCount=o.thCount??null; if(thCount===null){ try{ thCount=(await gbifName(o.sci,{},false)).count; }catch(e){} }
+  if(!o.key||!o.family){ try{ await enrichWild(o); }catch(e){} }
   const F=FAM[o.family];
   const row=(icon,title,body)=>`<div style="padding:9px 0;border-top:1px dashed var(--line)"><div style="font-weight:700">${icon} ${title}</div><div style="margin-top:3px">${body}</div></div>`;
   const name=o.th||o.sci;
   let h=`<div style="display:flex;gap:12px;align-items:center;margin-bottom:8px">
     <div class="pic" style="width:120px;height:90px">${o.img?`<img src="${o.img}" alt="${name}" onerror="this.parentNode.innerHTML='🐟'">`:'🐟'}</div>
     <div><div style="font-weight:700;font-size:20px">${name}</div><div style="font-style:italic;color:var(--mute)">${o.sci}</div>
+    ${o.alt&&o.alt.length?`<div class="muted">ชื่ออื่น: ${o.alt.join(', ')}</div>`:''}
     <div class="muted">${o.family?'วงศ์ '+o.family+(F?' ('+F[0]+')':''):''}</div>
     <div class="muted">${thCount===null?'':thCount?`📍 มีบันทึกพบในไทย ${thCount.toLocaleString()} ครั้ง`:'ยังไม่มีบันทึกพบในไทยในฐานข้อมูล GBIF'}</div></div></div>`;
   let habTags = hab.known ? [hab.fresh&&'🏞️ น้ำจืด',hab.sea&&'🌊 ทะเล'].filter(Boolean) : [];
@@ -1066,6 +1068,7 @@ async function showWildFish(o){
     h+=row('ℹ️','ข้อมูลการตกปลา','ยังไม่มีข้อมูลการตกของปลาวงศ์นี้ (ส่วนใหญ่เป็นปลาเล็กหรือปลาสวยงามที่ไม่นิยมตก)');
   }
   h+=`<div id="fsSeason" style="padding-top:9px;border-top:1px dashed var(--line)"><span class="spin"></span></div>`;
+  if(o.src) h+=`<p class="note">ชื่อไทยจาก: ${o.src.split('+').map(x=>x==='thbif'?'<a href="https://thbif.onep.go.th/taxons/taxon_detail/'+encodeURIComponent(o.sci)+'" target="_blank">TH-BIF (สผ./กรมประมง)</a>':'วิกิพีเดีย').join(', ')}</p>`;
   h+=`<p class="muted" style="margin-top:8px">${o.wiki?`<a href="${o.wiki}" target="_blank">อ่านเพิ่มที่วิกิพีเดีย</a> · `:''}${o.key?`<a href="https://www.gbif.org/species/${o.key}" target="_blank">GBIF</a>`:''}</p>`;
   box.innerHTML=h;
   try{
@@ -1078,6 +1081,27 @@ async function showWildFish(o){
   }catch(e){ $('#fsSeason').innerHTML=''; }
 }
 
+// ---------- ชื่อไทยของปลาทุกชนิดในไทย (data/fish_th.json สร้างจาก thbif + วิกิ) ----------
+let FISH_TH=null;
+fetch('data/fish_th.json').then(r=>r.ok?r.json():null).then(j=>{ if(Array.isArray(j)&&j.length) FISH_TH=j.map(x=>({...x, _n:[...(x.t||[]),...(x.l||[])].map(n=>n.replace(/^ปลา/,''))})); }).catch(()=>{});
+function dataSearch(q){
+  if(!FISH_TH) return null;
+  const qq=q.trim().replace(/^ปลา/,''), lat=/[a-z]/i.test(qq), ql=qq.toLowerCase();
+  if(!qq) return [];
+  const hits=[];
+  for(const x of FISH_TH){
+    let sc=-1;
+    if(lat){ if(x.s.toLowerCase().includes(ql)) sc= x.s.toLowerCase().startsWith(ql)?3:1; }
+    else x._n.forEach(n=>{ const v = n===qq?4 : n.startsWith(qq)?3 : n.includes(qq)?2 : -1; if(v>sc) sc=v; });
+    if(sc>=0) hits.push([sc,x]);
+  }
+  hits.sort((a,b)=>b[0]-a[0]||b[1].n-a[1].n);
+  return hits.slice(0,20).map(([_,x])=>{
+    const names=[...(x.t||[])]; const main=names.find(n=>n.startsWith('ปลา'))||names[0]||'';
+    const alt=[...names,...(x.l||[])].filter(n=>n!==main);
+    return {th:main, alt:[...new Set(alt)].slice(0,8), sci:x.s, key:x.k, family:x.f, thCount:x.n, src:x.src, isFish:true};
+  });
+}
 function initFishSearch(){
   const inp=$('#fsIn'), list=$('#fsList');
   const bind=()=>{ list.querySelectorAll('button[data-s]').forEach(b=>b.onclick=()=>{ inp.value=BY_SCI[b.dataset.s][0]; list.innerHTML=''; showFish(b.dataset.s); });
@@ -1089,6 +1113,14 @@ function initFishSearch(){
     list.innerHTML = cur + `<div id="fsWild" class="muted" style="margin-top:6px">${q.replace(/^ปลา/,'').length>=2?'<span class="spin"></span> กำลังค้นปลาชนิดอื่นในไทย...':'พิมพ์อย่างน้อย 2 ตัวอักษรเพื่อค้นปลาชนิดอื่น'}</div>`;
     bind();
     clearTimeout(fsTimer);
+    const dh=dataSearch(q);
+    if(dh && dh.length){
+      const cur2=dh.filter(o=>BY_SCI[o.sci]); WILD=dh.filter(o=>!BY_SCI[o.sci]);
+      const el=$('#fsWild');
+      if(cur2.length && !r.length) list.insertAdjacentHTML('afterbegin',`<div class="muted" style="margin:2px 0 4px">⭐ มีข้อมูลละเอียด</div>`+cur2.map(o=>`<button class="tag" data-s="${o.sci}" style="border:none;font-size:14px;padding:6px 12px;cursor:pointer">${BY_SCI[o.sci][0]}</button>`).join(''));
+      el.innerHTML = WILD.length ? `<div style="margin:2px 0 4px">🌐 ปลาชนิดอื่นในไทย (ชื่อไทยจาก thbif / วิกิพีเดีย)</div>`+WILD.map((o,i)=>`<button class="tag" data-w="${i}" style="border:none;font-size:14px;padding:6px 12px;cursor:pointer;background:#f1eefa">${o.th||o.sci}${o.th?` <i style="opacity:.6">${o.sci}</i>`:''}</button>`).join('') : '';
+      bind(); return;
+    }
     if(q.replace(/^ปลา/,'').length<2) return;
     fsTimer=setTimeout(async()=>{
       const w=await wildSearch(q,seq); if(w===null||seq!==fsSeq) return; WILD=w;
