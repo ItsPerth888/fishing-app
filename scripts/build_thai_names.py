@@ -93,11 +93,13 @@ def thbif(sci):
     try:
         lines = page_text(get(url, tries=2, timeout=25))
     except Exception as e:
-        return None, 'err:' + type(e).__name__
+        k = type(e).__name__ + str(getattr(e, 'code', '')); ERRS[k] = ERRS.get(k, 0) + 1
+        return None, 'err:' + k
     th = [x for x in grab(lines, 'ชื่อไทย') if re.search('[ก-๙]', x)]
     loc = grab(lines, 'ชื่อท้องถิ่น')
     if len(SAMPLES) < 3 and (th or loc): SAMPLES.append((sci, th, loc))
     return {'th': th, 'local': loc}, 'ok'
+ERRS = {}
 
 # ---------- 3) Wikidata / วิกิพีเดียไทย ----------
 def wikidata(names):
@@ -126,7 +128,7 @@ def wikidata(names):
 BUDGET = 270 * 60  # วินาที: หยุดเองก่อนหมดเวลาของ GitHub แล้วรอบหน้าทำต่อ
 def save(sp, done):
     out = [{'k': s['key'], 's': s['sci'], 'f': s['family'], 'n': s['n'], 't': s.get('th', []), 'l': s.get('local', []),
-            'src': s.get('src', ''), 'd': 1 if s.get('done') else 0, 'r': s.get('retry', 0)} for s in sp]
+            'src': s.get('src', ''), 'd': 1 if s.get('done') else 0, 'r': s.get('retry', 0), 'sr': s.get('sr', 0)} for s in sp]
     json.dump(out, open('data/fish_th.json', 'w', encoding='utf-8'), ensure_ascii=False, separators=(',', ':'))
     if done:
         if os.path.exists('data/INCOMPLETE'): os.remove('data/INCOMPLETE')
@@ -149,18 +151,23 @@ def main():
     log('species with names:', len(sp))
     for s in sp:
         p = prev.get(s['key'])
-        if p and p.get('d'): s.update(th=p['t'], local=p['l'], src=p['src'], done=True)
+        if p and p.get('d') and p.get('r', 0) >= 1 and not p.get('t') and not p.get('l') and not p.get('sr'):
+            s.update(retry=0, slow=True, src=p['src'])   # เคย error: ลองใหม่แบบช้า ๆ อีกครั้ง
+        elif p and p.get('d'): s.update(th=p['t'], local=p['l'], src=p['src'], done=True, sr=p.get('sr', 0))
         elif p: s['retry'] = p.get('r', 0)
     todo = [s for s in sp if not s.get('done')]
+    slow = any(s.get('slow') for s in todo)
+    workers, pause = (1, 1.5) if slow else (8, 0.2)
+    log('mode:', 'slow retry' if slow else 'normal', 'workers', workers)
     log('todo thbif:', len(todo))
     stats = {'ok': 0, 'err': 0, 'named': 0}
     def one(s):
         if time.time() - t0 > BUDGET: return s, None, 'skip'
-        r, st = thbif(s['sci']); time.sleep(0.2)
+        r, st = thbif(s['sci']); time.sleep(pause)
         return s, r, st
     finished = True
     from concurrent.futures import as_completed
-    with ThreadPoolExecutor(8) as ex:
+    with ThreadPoolExecutor(workers) as ex:
         futs = [ex.submit(one, s) for s in todo]
         for i, f in enumerate(as_completed(futs), 1):
             s, r, st = f.result()
@@ -168,13 +175,16 @@ def main():
             if st == 'ok':
                 stats['ok'] += 1
                 s.update(th=r['th'], local=r['local'], src='thbif' if (r['th'] or r['local']) else '', done=True)
+                if s.get('slow'): s['sr'] = 1
                 if r['th']: stats['named'] += 1
             else:
                 stats['err'] += 1
-                s.update(th=[], local=[], src='', done=s.get('retry', 0) >= 1)  # error ครั้งที่ 2 ถือว่าจบ
+                if s.get('slow'): s['sr'] = 1
+                s.update(th=[], local=[], src='', done=s.get('retry', 0) >= 1 or bool(s.get('slow')))  # error ครั้งที่ 2 ถือว่าจบ
                 s['retry'] = s.get('retry', 0) + 1
             if i % 200 == 0:
                 save(sp, False); log('progress', i, '/', len(todo), stats, '%.0fs' % (time.time() - t0))
+    log('error kinds:', ERRS if 'ERRS' in globals() else {})
     log('thbif:', stats, 'finished' if finished else 'stopped by time budget')
     for x in SAMPLES: log('sample', x)
     # วิกิ: เฉพาะตัวที่ยังไม่มีชื่อไทย
