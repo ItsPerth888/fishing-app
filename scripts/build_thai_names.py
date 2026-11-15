@@ -25,7 +25,15 @@ def get(url, tries=3, timeout=30):
 # ---------- 1) GBIF: ปลาที่มีบันทึกในไทย ----------
 def gbif_species():
     keys = {}
-    for taxon in ('204', '121'):  # Actinopterygii, Elasmobranchii
+    taxa = []
+    for cls in ('Actinopterygii', 'Elasmobranchii', 'Holocephali', 'Sarcopterygii', 'Petromyzonti'):
+        try:
+            m = json.loads(get('https://api.gbif.org/v1/species/match?rank=CLASS&name=' + cls))
+            if m.get('usageKey') and m.get('rank') == 'CLASS':
+                taxa.append(str(m['usageKey'])); log('class', cls, '->', m['usageKey'])
+        except Exception as e:
+            log('class match error', cls, e)
+    for taxon in taxa:
         off = 0
         while True:
             u = ('https://api.gbif.org/v1/occurrence/search?country=TH&taxonKey=%s&limit=0'
@@ -109,6 +117,7 @@ def wikidata(names):
     return found
 
 def main():
+    import os; os.makedirs('data', exist_ok=True)
     t0 = time.time()
     sp = gbif_species()
     log('species with names:', len(sp))
@@ -117,7 +126,16 @@ def main():
         r, st = thbif(s['sci']); time.sleep(0.3)
         return s, r, st
     with ThreadPoolExecutor(4) as ex:
-        for s, r, st in ex.map(one, sp):
+        res = list(ex.map(one, sp))
+    # ลองซ้ำตัวที่ error (ช้าลง)
+    bad = [s for s, r, st in res if st != 'ok']
+    if bad:
+        log('retry thbif errors:', len(bad))
+        with ThreadPoolExecutor(2) as ex:
+            again = {id(s): (r, st) for s, r, st in ex.map(one, bad)}
+        res = [(s,) + again.get(id(s), (r, st)) for s, r, st in res]
+    if True:
+        for s, r, st in res:
             if st == 'ok':
                 stats['ok'] += 1
                 s['th'], s['local'], s['src'] = r['th'], r['local'], 'thbif' if (r['th'] or r['local']) else ''
@@ -141,4 +159,5 @@ def main():
 try:
     main()
 finally:
+    import os; os.makedirs('data', exist_ok=True)
     open('data/build_log.txt', 'w', encoding='utf-8').write('\n'.join(LOG) + '\n')
