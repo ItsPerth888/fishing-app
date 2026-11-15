@@ -97,7 +97,8 @@ a{color:var(--pri)}
 
 <section class="card">
   <h2>🔎 ค้นหาข้อมูลปลา</h2>
-  <div class="row"><input id="fsIn" class="grow" placeholder="พิมพ์ชื่อปลา เช่น ช่อน, เก๋า, กะพง" autocomplete="off"><button id="fsAll">ดูทั้งหมด</button></div>
+  <div class="row"><input id="fsIn" class="grow" placeholder="พิมพ์ชื่อปลาไทย หรือชื่อวิทยาศาสตร์" autocomplete="off"><button id="fsAll">ดูทั้งหมด</button></div>
+  <div class="note" style="margin-top:4px">⭐ ข้อมูลละเอียด 73 ชนิดยอดนิยม · 🌐 ปลาชนิดอื่นในไทยค้นสดจากวิกิพีเดียไทยและ GBIF</div>
   <div id="fsList" style="margin-top:8px"></div>
   <div id="fsOut" style="margin-top:8px"></div>
 </section>
@@ -944,11 +945,158 @@ async function showFish(sci){
       ${best.length?`<p class="muted">เดือนที่พบบ่อยสุด: <b>${best.join(', ')}</b></p>`:'<p class="muted">ยังมีข้อมูลรายเดือนไม่พอ</p>'}`;
   }catch(e){ $('#fsSeason').innerHTML='<span class="muted">โหลดข้อมูลฤดูกาลไม่ได้</span>'; }
 }
+const profCache={};
+async function habitatOf(key){
+  if(profCache[key]) return profCache[key];
+  const j=await fetch('https://api.gbif.org/v1/species/'+key+'/speciesProfiles').then(r=>r.json()).catch(()=>({results:[]}));
+  const h={fresh:false,sea:false,known:false};
+  (j.results||[]).forEach(p=>{ if(p.freshwater===true){h.fresh=true;h.known=true;} if(p.marine===true){h.sea=true;h.known=true;}
+    if((p.habitat||'').toLowerCase().includes('brackish')){h.fresh=h.sea=h.known=true;} });
+  return profCache[key]=h;
+}
+// ---------- ข้อมูลการตกปลาตามวงศ์ (ใช้กับปลาที่ไม่มีข้อมูลรายตัว) ----------
+// วงศ์: [ชื่อไทย, แหล่งน้ำ, ลม 0-2, เหยื่อสด, เหยื่อปลอม, สายหน้า, ลักษณะน้ำ, จุดที่พบ]
+const FAM={};
+const fam=(names,v)=>names.split('|').forEach(n=>FAM[n]=v);
+fam('Channidae',['วงศ์ปลาช่อน','RCDP',1,'กบ ปลาเป็น','กบยาง, ปลั๊กผิวน้ำ, สปินเนอร์','ช็อคหลีด 20–40 ปอนด์ (ตัวใหญ่ใช้สายสลิง)','น้ำนิ่ง อุ่น มีพืชน้ำ','พงหญ้า กอบัว ตอไม้ ริมตลิ่ง']);
+fam('Clariidae',['วงศ์ปลาดุก','CP',2,'ไส้เดือน เหยื่อหมัก','','ไม่ต้อง','น้ำนิ่ง ขุ่น พื้นโคลน กินดีกลางคืนและหลังฝน','หน้าดินโคลน คันนา ร่องสวน']);
+fam('Bagridae',['วงศ์ปลากด/ปลาแขยง','RCD',2,'ไส้เดือน กุ้ง ปลาเป็น','เหยื่อยาง, ปลั๊กดำลึก (ตัวใหญ่)','ไม่ต้อง หรือช็อคหลีด 20–40 ปอนด์ ถ้าตัวใหญ่','น้ำขุ่น ไหลเอื่อย กินดีกลางคืน','หน้าดิน วังน้ำลึก ซอกหิน ตอไม้']);
+fam('Siluridae',['วงศ์ปลาเค้า/ปลาเนื้ออ่อน','RD',1,'ปลาเป็น กุ้ง','ปลั๊กดำลึก, สปูน (ชนิดตัวใหญ่)','ช็อคหลีด 30–60 ปอนด์ สำหรับชนิดฟันเยอะ','น้ำขุ่น ลึก ออกหากินกลางคืน','วังน้ำลึก ตอไม้ กลางน้ำ']);
+fam('Pangasiidae',['วงศ์ปลาสวาย','RD',2,'เหยื่อหมัก ผลไม้ ขนมปัง','','ช็อคหลีด 30–80 ปอนด์ ตามขนาดปลา','น้ำไหลเอื่อย ขุ่น ลึก','แม่น้ำใหญ่ ใต้ต้นไม้ที่ผลไม้ร่วง หน้าดิน']);
+fam('Ariidae|Plotosidae',['วงศ์ปลากดทะเล/ปลาดุกทะเล','SE',2,'กุ้ง หมึก ไส้เดือนทะเล','','ไม่ต้อง (ระวังเงี่ยงพิษ)','น้ำขุ่น น้ำกร่อย','หน้าดินโคลน ปากแม่น้ำ ป่าชายเลน']);
+fam('Cyprinidae|Danionidae|Xenocyprididae|Leuciscidae',['วงศ์ปลาตะเพียน/ปลาสร้อย/ปลาซิว','RCDP',2,'รำ ข้าวสุก ขนมปัง ไส้เดือน','สปินเนอร์จิ๋ว, สปูนเล็ก (ชนิดกินเนื้อ เช่น กระสูบ)','ไม่ต้อง (ชนิดตัวใหญ่ใช้ช็อคหลีด 20–30 ปอนด์)','น้ำไหลเอื่อยถึงนิ่ง กินดีหลังฝน','กลางน้ำ ใกล้ฝาย แก่ง ใต้ต้นไม้ริมน้ำ']);
+fam('Cobitidae|Botiidae|Nemacheilidae|Balitoridae',['วงศ์ปลาหมู/ปลาค้อ','RC',2,'ไส้เดือน หนอน','','ไม่ต้อง','น้ำไหล ใส พื้นกรวด','หน้าดินกรวด ซอกหินในลำธาร']);
+fam('Cichlidae',['วงศ์ปลาหมอสี/ปลานิล','RCDP',2,'ไส้เดือน รำ หัวอาหาร','สปินเนอร์, ปลั๊กตื้น (ชนิดกินเนื้อ)','ไม่ต้อง หรือช็อคหลีด 15–20 ปอนด์','น้ำนิ่ง อุ่น','ริมตลิ่ง ตอไม้ กองหิน']);
+fam('Anabantidae',['วงศ์ปลาหมอ','CP',1,'ไส้เดือน หนอน','','ไม่ต้อง','น้ำนิ่ง ตื้น อุ่น','นาข้าว คลองเล็ก พงหญ้า']);
+fam('Osphronemidae',['วงศ์ปลากระดี่/ปลาสลิด/ปลาแรด','CP',1,'ไส้เดือน หนอน ผัก','','ไม่ต้อง','น้ำนิ่ง ตื้น มีพืชน้ำ','ผักตบ พงหญ้า นาข้าว']);
+fam('Notopteridae',['วงศ์ปลากราย/ปลาสลาด','RDP',1,'ปลาเป็น กุ้ง ไส้เดือน','ปลั๊กดำกลางน้ำ (กินไม่บ่อย)','ช็อคหลีด 20–40 ปอนด์','น้ำนิ่ง ลึก ออกหากินพลบค่ำ','วังน้ำลึก ตอไม้ ต้นไม้ล้มในน้ำ']);
+fam('Osteoglossidae',['วงศ์ปลาตะพัด/อะโรวาน่า','RP',1,'แมลง กบ ปลาเป็น','ปลั๊กผิวน้ำ, สปินเนอร์','ช็อคหลีด 20–30 ปอนด์','น้ำนิ่ง ใส','ใต้ร่มไม้ริมน้ำ ผิวน้ำ (สัตว์คุ้มครอง ห้ามจับ)']);
+fam('Datnioididae',['วงศ์ปลาเสือตอ','RD',1,'กุ้งฝอย ปลาเป็น','ปลั๊กเล็ก, เหยื่อยางรูปกุ้ง','ช็อคหลีด 15–20 ปอนด์','น้ำไหลเอื่อย ใส','ตอไม้ ซอกหิน รากไม้']);
+fam('Toxotidae',['วงศ์ปลาเสือพ่นน้ำ','E',0,'แมลง หนอน','แมลงปลอม (ได้บ้าง)','ไม่ต้อง','น้ำกร่อย นิ่ง','ใต้ต้นไม้ริมน้ำ ป่าชายเลน']);
+fam('Mastacembelidae|Synbranchidae',['วงศ์ปลากระทิง/ปลาไหล','RCP',2,'ไส้เดือน กุ้ง','','ไม่ต้อง','น้ำไหลเอื่อย พื้นทราย/โคลน','ซอกหิน ตอไม้ รูตามตลิ่ง']);
+fam('Eleotridae|Butidae|Oxudercidae|Gobiidae',['วงศ์ปลาบู่','RCDPE',1,'ปลาเป็น กุ้ง ไส้เดือน','ปลั๊กดำ (ลากช้า), เหยื่อยาง','ไม่ต้อง หรือช็อคหลีด 20 ปอนด์','น้ำนิ่ง กลางคืน','ตอไม้ ซอกหิน กองหิน ใต้กระชัง']);
+fam('Sciaenidae',['วงศ์ปลาจวด/ปลาม้า','RSE',2,'กุ้ง ปลาเป็น','เหยื่อยางรูปกุ้ง, ปลั๊กดำลึก','ช็อคหลีด 20–30 ปอนด์','น้ำขุ่น ลึก','หน้าดินโคลน วังน้ำลึก ปากแม่น้ำ']);
+fam('Latidae',['วงศ์ปลากะพงขาว','ESR',2,'กุ้งเป็น ปลาเป็น','ปลั๊กมินนาว, ป็อปเปอร์, ไบเบรชั่น, เหยื่อยาง','ช็อคหลีด 30–50 ปอนด์ (ฝาเหงือกคม)','น้ำกร่อย ช่วงน้ำเริ่มไหล','ปากแม่น้ำ รากโกงกาง เสาสะพาน']);
+fam('Lobotidae',['วงศ์ปลากะพงดำ','ES',2,'กุ้ง ปลาเป็น','ปลั๊กดำ, เหยื่อยาง','ช็อคหลีด 30 ปอนด์','น้ำกร่อย','ใต้ขยะลอยน้ำ ไม้ลอย เสาท่าเรือ']);
+fam('Lutjanidae',['วงศ์ปลากะพงแดง/ปลากะพงข้างปาน','SE',2,'ปลาเป็น หมึก กุ้ง','ไมโครจิ๊ก, เหยื่อยาง, ปลั๊กดำ','ช็อคหลีด 30–50 ปอนด์','น้ำใส ช่วงน้ำเปลี่ยน','แนวปะการัง กองหิน ซากเรือ รากโกงกาง']);
+fam('Serranidae|Epinephelidae',['วงศ์ปลาเก๋า/ปลากะรัง','SE',2,'ปลาเป็น กุ้ง หมึก','สโลว์จิ๊ก, เหยื่อยาง, ปลั๊กดำลึก','ช็อคหลีด 40–80 ปอนด์ (กันสายเสียดสีหิน)','น้ำเปลี่ยน กระแสอ่อน','ซอกหิน กองหิน ปะการัง ซากเรือ']);
+fam('Carangidae',['วงศ์ปลาสีกุน/ปลาหางแข็ง','S',2,'ปลาเป็น หมึก','ป็อปเปอร์, เมทัลจิ๊ก, ซาบิกิ (ตัวเล็ก)','ช็อคหลีด 30–60 ปอนด์','น้ำไหล มีคลื่น','โขดหิน หัวแหลม ท่าเรือ ตามฝูงปลาเหยื่อ']);
+fam('Scombridae',['วงศ์ปลาทู/ปลาโอ/ปลาอินทรี','S',2,'ปลาเป็น','เมทัลจิ๊ก, ปลั๊กลาก, ป็อปเปอร์, ซาบิกิ (ปลาทู)','ปลาอินทรีใช้สายสลิง ชนิดอื่นใช้ช็อคหลีด 30–40 ปอนด์','น้ำใส ทะเลเปิด','ตามฝูงปลาเหยื่อ จุดที่มีนกลงจับเหยื่อ กองหินใต้น้ำ']);
+fam('Sphyraenidae',['วงศ์ปลาสาก','S',2,'ปลาเป็น','ปลั๊กมินนาว, เมทัลจิ๊ก, สปูน','สายสลิง (ฟันคม)','น้ำใส','แนวปะการัง ท่าเรือ ใต้ไฟตอนกลางคืน']);
+fam('Polynemidae',['วงศ์ปลากุเลา','SE',2,'กุ้ง','เหยื่อยางรูปกุ้ง, ปลั๊กดำตื้น','ช็อคหลีด 20–30 ปอนด์','น้ำขุ่น ช่วงน้ำขึ้น','ชายหาดโคลน ปากแม่น้ำ']);
+fam('Mugilidae',['วงศ์ปลากระบอก','ES',1,'ขนมปัง รำ','','ไม่ต้อง','น้ำกร่อย ตื้น','ปากแม่น้ำ ท่าเรือ ผิวน้ำ']);
+fam('Sillaginidae',['วงศ์ปลาเห็ดโคน','SE',1,'ไส้เดือนทะเล กุ้ง','ไมโครจิ๊ก (ได้บ้าง)','ไม่ต้อง','น้ำใส พื้นทราย ช่วงน้ำขึ้น','ชายหาดทราย หน้าดินตื้น']);
+fam('Nemipteridae',['วงศ์ปลาทรายแดง','S',2,'หมึก กุ้ง','ไมโครจิ๊ก, ซาบิกิ','ไม่ต้อง','น้ำลึกพอสมควร','หน้าดินทราย/โคลนนอกฝั่ง']);
+fam('Lethrinidae|Haemulidae|Sparidae',['วงศ์ปลาหมูสี/ปลาสร้อยนกเขาทะเล','S',2,'กุ้ง หมึก','ไมโครจิ๊ก, เหยื่อยาง','ช็อคหลีด 20–40 ปอนด์','น้ำใส','แนวปะการัง กองหิน หน้าดินทราย']);
+fam('Rachycentridae',['วงศ์ปลาช่อนทะเล','S',2,'ปลาเป็น','เมทัลจิ๊ก, ป็อปเปอร์','ช็อคหลีด 50–80 ปอนด์','ทะเลเปิด','ทุ่นลอย เสาแท่นขุดเจาะ ซากเรือ']);
+fam('Leiognathidae|Gerreidae|Ambassidae',['วงศ์ปลาแป้น/ปลาดอกหมาก','SE',1,'กุ้ง ไส้เดือนทะเล','ซาบิกิ','ไม่ต้อง','น้ำกร่อยถึงเค็ม','ท่าเรือ ชายฝั่ง ปากแม่น้ำ']);
+fam('Stromateidae',['วงศ์ปลาจะละเม็ด','S',1,'กุ้ง','','ไม่ต้อง','ทะเลเปิด','หน้าดินโคลนนอกฝั่ง']);
+fam('Balistidae|Monacanthidae',['วงศ์ปลาวัว/ปลาวัวหนัง','S',1,'หมึก กุ้ง','','ช็อคหลีด 30 ปอนด์ หรือสลิงสั้น (ฟันกัดสายได้)','น้ำใส','แนวปะการัง กองหิน']);
+fam('Tetraodontidae|Diodontidae',['วงศ์ปลาปักเป้า','RSE',1,'กุ้ง','','ไม่ต้อง (ฟันกัดสายได้)','ทุกแบบ','ทั่วไป (⚠️ เนื้อมีพิษ ห้ามกิน)']);
+fam('Dasyatidae|Myliobatidae|Gymnuridae|Potamotrygonidae',['วงศ์ปลากระเบน','SER',2,'ปลาเป็น หมึก กุ้ง','','ช็อคหลีด 50–80 ปอนด์','น้ำขุ่น','หน้าดินทราย/โคลน (⚠️ ระวังเงี่ยงหาง)']);
+fam('Carcharhinidae|Sphyrnidae|Hemiscylliidae',['วงศ์ปลาฉลาม','S',2,'ปลาเป็น','','สายสลิง','ทะเลเปิด','นอกฝั่ง แนวปะการัง (หลายชนิดเป็นสัตว์คุ้มครอง)']);
+fam('Belonidae|Hemiramphidae|Zenarchopteridae',['วงศ์ปลากระทุงเหว/ปลาเข็ม','RSE',1,'ปลาเล็ก กุ้ง','ปลั๊กผิวน้ำเล็ก, สปูนเล็ก','ช็อคหลีด 15–20 ปอนด์ (ปากแข็งมีฟัน)','น้ำใส','ผิวน้ำ ท่าเรือ ริมตลิ่ง']);
+fam('Siganidae|Scatophagidae',['วงศ์ปลาสลิดหิน/ปลาตะกรับ','SE',1,'ตะไคร่ กุ้ง','','ไม่ต้อง (⚠️ เงี่ยงมีพิษ)','น้ำกร่อยถึงเค็ม','ป่าชายเลน กองหิน เสาท่าเรือ']);
+fam('Megalopidae|Elopidae|Chanidae',['วงศ์ปลาตาเหลือก/ปลานวลจันทร์ทะเล','ES',2,'กุ้ง ปลาเล็ก','ปลั๊กเล็ก, สปูนเล็ก','ช็อคหลีด 20–30 ปอนด์','น้ำกร่อย','ปากแม่น้ำ บ่อน้ำกร่อย ป่าชายเลน']);
+fam('Terapontidae',['วงศ์ปลาข้างตะเภา','SE',2,'กุ้ง','ไมโครจิ๊ก (ได้บ้าง)','ไม่ต้อง','น้ำกร่อย','ปากแม่น้ำ ชายฝั่ง']);
+fam('Clupeidae|Engraulidae|Dorosomatidae',['วงศ์ปลาหลังเขียว/ปลากะตัก','SE',1,'—','ซาบิกิ','ไม่ต้อง','น้ำใส','ท่าเรือ ใต้ไฟตอนกลางคืน']);
+
+// ---------- ค้นหาปลาทุกชนิดในไทย (วิกิพีเดียไทย + GBIF) ----------
+const FISH_CLASS=/Actinopterygii|Elasmobranchii|Chondrichthyes|Teleostei|Sarcopterygii|Holocephali|Cephalaspidomorphi|Petromyzonti/;
+async function wikiFishSearch(q){
+  const j=await wget(`https://th.wikipedia.org/w/api.php?action=query&generator=search&gsrsearch=${encodeURIComponent('ปลา'+q.replace(/^ปลา/,''))}&gsrlimit=15&gsrnamespace=0&prop=pageprops|pageimages&ppprop=wikibase_item&piprop=thumbnail&pithumbsize=400&format=json&origin=*`);
+  let pages=Object.values((j.query||{}).pages||{}).sort((a,b)=>(a.index||0)-(b.index||0)).filter(p=>p.pageprops&&p.pageprops.wikibase_item);
+  if(!pages.length) return [];
+  const ids=pages.map(p=>p.pageprops.wikibase_item).join('|');
+  const w=await wget(`https://www.wikidata.org/w/api.php?action=wbgetentities&ids=${ids}&props=claims&format=json&origin=*`);
+  const out=[];
+  for(const p of pages){
+    const c=((w.entities||{})[p.pageprops.wikibase_item]||{}).claims||{};
+    const sci=(((c.P225||[])[0]||{}).mainsnak||{}).datavalue; if(!sci) continue;
+    out.push({th:p.title, sci:sci.value, img:p.thumbnail&&p.thumbnail.source, wiki:'https://th.wikipedia.org/wiki/'+encodeURIComponent(p.title.replace(/ /g,'_'))});
+  }
+  return out;
+}
+async function gbifFishSearch(q){
+  const j=await wget(`https://api.gbif.org/v1/species/search?q=${encodeURIComponent(q)}&rank=SPECIES&status=ACCEPTED&datasetKey=d7dddbf4-2cf0-4f39-9b2a-bb099caae36c&limit=20`);
+  return (j.results||[]).filter(r=>FISH_CLASS.test(r.class||'')).slice(0,10).map(r=>({th:((r.vernacularNames||[]).find(v=>v.language==='tha')||{}).vernacularName||'', sci:r.canonicalName||r.scientificName}));
+}
+async function enrichWild(o){
+  const m=await wget(`https://api.gbif.org/v1/species/match?name=${encodeURIComponent(o.sci)}`);
+  o.key=m.usageKey; o.family=m.family; o.isFish=FISH_CLASS.test(m.class||'');
+  return o;
+}
+let fsTimer=null, fsSeq=0;
+async function wildSearch(q, seq){
+  const latin=/[a-z]/i.test(q);
+  let res=[];
+  try{ res = latin ? await gbifFishSearch(q) : await wikiFishSearch(q); }catch(e){}
+  if(seq!==fsSeq) return null;
+  res=res.filter(r=>!BY_SCI[r.sci]);
+  const seen=new Set(); res=res.filter(r=>!seen.has(r.sci)&&seen.add(r.sci));
+  await pool(res,5,o=>enrichWild(o).catch(()=>o));
+  return res.filter(o=>o.isFish!==false && (latin || o.th.startsWith('ปลา') || o.isFish));
+}
+async function showWildFish(o){
+  const box=$('#fsOut'); box.innerHTML='<span class="spin"></span>';
+  if(!o.img){ await fishImages([o.sci]); o.img=imgCache[o.sci]; }
+  let hab={fresh:false,sea:false,known:false}; try{ if(o.key) hab=await habitatOf(o.key); }catch(e){}
+  let thCount=null; try{ thCount=(await gbifName(o.sci,{},false)).count; }catch(e){}
+  const F=FAM[o.family];
+  const row=(icon,title,body)=>`<div style="padding:9px 0;border-top:1px dashed var(--line)"><div style="font-weight:700">${icon} ${title}</div><div style="margin-top:3px">${body}</div></div>`;
+  const name=o.th||o.sci;
+  let h=`<div style="display:flex;gap:12px;align-items:center;margin-bottom:8px">
+    <div class="pic" style="width:120px;height:90px">${o.img?`<img src="${o.img}" alt="${name}" onerror="this.parentNode.innerHTML='🐟'">`:'🐟'}</div>
+    <div><div style="font-weight:700;font-size:20px">${name}</div><div style="font-style:italic;color:var(--mute)">${o.sci}</div>
+    <div class="muted">${o.family?'วงศ์ '+o.family+(F?' ('+F[0]+')':''):''}</div>
+    <div class="muted">${thCount===null?'':thCount?`📍 มีบันทึกพบในไทย ${thCount.toLocaleString()} ครั้ง`:'ยังไม่มีบันทึกพบในไทยในฐานข้อมูล GBIF'}</div></div></div>`;
+  let habTags = hab.known ? [hab.fresh&&'🏞️ น้ำจืด',hab.sea&&'🌊 ทะเล'].filter(Boolean) : [];
+  if(!habTags.length && F) habTags=[...F[1]].map(k=>WI[k]+' '+WT[k]);
+  h+=row('💧','แหล่งน้ำที่อยู่อาศัย', habTags.length?habTags.map(t=>`<span class="tag">${t}</span>`).join(''):'<span class="muted">ไม่มีข้อมูล</span>');
+  if(F){
+    h+=`<div class="note" style="background:#fbf1e1;padding:8px 10px;border-radius:8px;margin:6px 0">ℹ️ ข้อมูลการตกด้านล่างเป็นลักษณะทั่วไปของ${F[0]} ปลาชนิดนี้อาจต่างไปบ้าง</div>`;
+    h+=row('📍','จุดที่มักพบ',F[7]);
+    h+=row('🌊','ลักษณะน้ำที่มีโอกาสติดเบ็ด',F[6]);
+    h+=row('💨','ลมแรงจะกินเหยื่อไหม',WIND_TXT[F[2]]);
+    h+=row('🪝','เหยื่อสด',F[3]);
+    const lt=F[4]?LURE_TYPES.filter(L=>L.re.test(F[4])):[];
+    h+=row('🎯','เหยื่อปลอม', F[4]?`<b>${F[4]}</b>${lt.length?`<div class="row" style="margin-top:6px">${lt.map(L=>`<div style="width:90px;text-align:center"><div style="height:54px;background:#e7f2f4;border-radius:8px">${LURE_SVG[L.k]||''}</div><div style="font-size:11px;color:var(--mute)">${L.k}</div></div>`).join('')}</div>`:''}`:'ไม่นิยมตกด้วยเหยื่อปลอม');
+    h+=row('🧵','ต่อสายหน้าไหม',`<span class="tag hot" style="font-size:13px">${leaderTag(F[5])}</span><div style="margin-top:4px">${F[5]}</div>`);
+  } else {
+    h+=row('ℹ️','ข้อมูลการตกปลา','ยังไม่มีข้อมูลการตกของปลาวงศ์นี้ (ส่วนใหญ่เป็นปลาเล็กหรือปลาสวยงามที่ไม่นิยมตก)');
+  }
+  h+=`<div id="fsSeason" style="padding-top:9px;border-top:1px dashed var(--line)"><span class="spin"></span></div>`;
+  h+=`<p class="muted" style="margin-top:8px">${o.wiki?`<a href="${o.wiki}" target="_blank">อ่านเพิ่มที่วิกิพีเดีย</a> · `:''}${o.key?`<a href="https://www.gbif.org/species/${o.key}" target="_blank">GBIF</a>`:''}</p>`;
+  box.innerHTML=h;
+  try{
+    const vals=await seasonOf(o.sci), mx=Math.max(1,...vals), cm=new Date().getMonth();
+    const best=vals.map((v,i)=>[v,i]).filter(x=>x[0]>0).sort((a,b)=>b[0]-a[0]).slice(0,3).map(x=>TH_M[x[1]]);
+    $('#fsSeason').innerHTML=`<div style="font-weight:700">📅 ฤดูกาลที่พบในประเทศไทย</div>
+      <div class="bars">${vals.map((v,i)=>`<div class="${i===cm?'cur':''}" style="height:${v/mx*100}%"></div>`).join('')}</div>
+      <div class="blabels">${TH_M.map(x=>`<span>${x.replace('.','').slice(0,2)}</span>`).join('')}</div>
+      ${best.length?`<p class="muted">เดือนที่พบบ่อยสุด: <b>${best.join(', ')}</b></p>`:'<p class="muted">ยังมีข้อมูลรายเดือนไม่พอ</p>'}`;
+  }catch(e){ $('#fsSeason').innerHTML=''; }
+}
+
 function initFishSearch(){
   const inp=$('#fsIn'), list=$('#fsList');
-  const draw=()=>{ const r=searchFishList(inp.value);
-    list.innerHTML = inp.value.trim() ? (r.length ? r.map(f=>`<button class="tag" data-s="${f[1]}" style="border:none;font-size:14px;padding:6px 12px;cursor:pointer">${f[0]}</button>`).join('') : '<span class="muted">ไม่พบปลาชื่อนี้ในรายการ</span>') : '';
-    list.querySelectorAll('button').forEach(b=>b.onclick=()=>{ inp.value=BY_SCI[b.dataset.s][0]; list.innerHTML=''; showFish(b.dataset.s); });
+  const bind=()=>{ list.querySelectorAll('button[data-s]').forEach(b=>b.onclick=()=>{ inp.value=BY_SCI[b.dataset.s][0]; list.innerHTML=''; showFish(b.dataset.s); });
+    list.querySelectorAll('button[data-w]').forEach(b=>b.onclick=()=>{ const o=WILD[+b.dataset.w]; inp.value=o.th||o.sci; list.innerHTML=''; showWildFish(o); }); };
+  let WILD=[];
+  const draw=()=>{ const q=inp.value.trim(); const r=searchFishList(q); const seq=++fsSeq;
+    if(!q){ list.innerHTML=''; return; }
+    const cur = r.length ? `<div class="muted" style="margin:2px 0 4px">⭐ มีข้อมูลละเอียด</div>`+r.map(f=>`<button class="tag" data-s="${f[1]}" style="border:none;font-size:14px;padding:6px 12px;cursor:pointer">${f[0]}</button>`).join('') : '';
+    list.innerHTML = cur + `<div id="fsWild" class="muted" style="margin-top:6px">${q.replace(/^ปลา/,'').length>=2?'<span class="spin"></span> กำลังค้นปลาชนิดอื่นในไทย...':'พิมพ์อย่างน้อย 2 ตัวอักษรเพื่อค้นปลาชนิดอื่น'}</div>`;
+    bind();
+    clearTimeout(fsTimer);
+    if(q.replace(/^ปลา/,'').length<2) return;
+    fsTimer=setTimeout(async()=>{
+      const w=await wildSearch(q,seq); if(w===null||seq!==fsSeq) return; WILD=w;
+      const el=$('#fsWild'); if(!el) return;
+      el.innerHTML = w.length ? `<div style="margin:2px 0 4px">🌐 ชนิดอื่นจากวิกิพีเดีย/GBIF</div>`+w.map((o,i)=>`<button class="tag" data-w="${i}" style="border:none;font-size:14px;padding:6px 12px;cursor:pointer;background:#f1eefa">${o.th||o.sci}${o.th?` <i style="opacity:.6">${o.sci}</i>`:''}</button>`).join('')
+        : (r.length?'':'ไม่พบปลาชื่อนี้ ลองพิมพ์ชื่ออื่นหรือชื่อวิทยาศาสตร์');
+      bind();
+    },450);
   };
   inp.oninput=draw;
   $('#fsAll').onclick=()=>{ list.innerHTML=FISH.map(f=>`<button class="tag" data-s="${f[1]}" style="border:none;font-size:13px;padding:5px 10px;cursor:pointer">${f[0]}</button>`).join('');
