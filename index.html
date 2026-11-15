@@ -95,6 +95,13 @@ a{color:var(--pri)}
   <button class="pri big" id="goBtn" style="margin-top:12px">🔎 ค้นหาปลา</button>
 </section>
 
+<section class="card">
+  <h2>🔎 ค้นหาข้อมูลปลา</h2>
+  <div class="row"><input id="fsIn" class="grow" placeholder="พิมพ์ชื่อปลา เช่น ช่อน, เก๋า, กะพง" autocomplete="off"><button id="fsAll">ดูทั้งหมด</button></div>
+  <div id="fsList" style="margin-top:8px"></div>
+  <div id="fsOut" style="margin-top:8px"></div>
+</section>
+
 <section class="card" id="timeCard" style="display:none">
   <h2>⏰ ช่วงเวลาที่น่าตก</h2>
   <div id="timeOut"></div>
@@ -819,6 +826,136 @@ async function toggle(el, m){
   }catch(e){ d.textContent='โหลดไม่สำเร็จ'; }
 }
 
+// ---------- ข้อมูลเชิงลึกของปลาแต่ละชนิด ----------
+// [ลม 2=ยังกินดี 1=กินน้อยลง 0=มักไม่กิน, สายหน้า, ลักษณะน้ำที่ปลามักติดเบ็ด, จุดที่พบ, หมายเหตุเรื่องลม(ถ้ามี)]
+const BOTTOM='หากินหน้าดิน ลมแรงไม่ค่อยมีผล ยังกินเหยื่อได้';
+const PROFILE={
+'Channa striata':[1,'ไม่ต้อง หรือใช้ช็อคหลีด 20–30 ปอนด์ ถ้าตีเข้าพงหญ้า','น้ำนิ่งถึงไหลเอื่อย ใสถึงขุ่นเล็กน้อย อากาศอุ่น','พงหญ้าริมตลิ่ง กอบัว สาหร่าย ผักตบ น้ำตื้นที่มีรากไม้'],
+'Channa micropeltes':[1,'สายสลิง หรือช็อคหลีด 40–60 ปอนด์ (ฟันคมมาก)','น้ำนิ่ง ลึกปานกลาง ใสถึงขุ่นเล็กน้อย','ตอไม้ในเขื่อน ขอบพงไม้น้ำ แนวไม้จมน้ำ ช่วงคุมลูกจะขึ้นมาที่ผิวน้ำ'],
+'Channa lucius':[1,'ช็อคหลีด 15–20 ปอนด์','น้ำนิ่ง ใส มีร่มเงา','ริมตลิ่งใต้ร่มไม้ รากไม้ ต้นไม้ล้มในน้ำ'],
+'Channa limbata':[1,'ไม่ต้อง','น้ำไหลเอื่อย ใส เย็น','ลำธารบนเขา ใต้ก้อนหิน ซอกหินริมลำธาร'],
+'Clarias batrachus':[2,'ไม่ต้อง','น้ำนิ่ง ขุ่น พื้นโคลน กินดีหลังฝนตกและตอนกลางคืน','หน้าดินโคลน ใกล้ท่อน้ำทิ้ง คันนา ร่องสวน',BOTTOM],
+'Clarias macrocephalus':[2,'ไม่ต้อง','น้ำนิ่ง ขุ่น พื้นโคลน กินดีตอนกลางคืน','หน้าดินโคลน คันนา บ่อดิน',BOTTOM],
+'Anabas testudineus':[1,'ไม่ต้อง','น้ำนิ่ง ตื้น อุ่น ออกหากินมากช่วงฝนตกใหม่ ๆ','นาข้าว คลองเล็ก บ่อดิน พงหญ้าน้ำตื้น'],
+'Oreochromis mossambicus':[2,'ไม่ต้อง','น้ำนิ่ง ตื้น ทนน้ำกร่อยและน้ำเสียได้','ริมบ่อ ปากท่อ ร่องน้ำตื้น'],
+'Sarotherodon melanotheron':[2,'ไม่ต้อง','น้ำกร่อยถึงจืด ตื้น','คลองใกล้ทะเล บ่อกุ้ง ปากแม่น้ำ'],
+'Heterotilapia buttikoferi':[1,'ช็อคหลีด 15–20 ปอนด์','น้ำนิ่ง ใส ในเขื่อน','ตอไม้ กองหิน ตลิ่งชันในเขื่อน'],
+'Oreochromis niloticus':[2,'ไม่ต้อง','น้ำนิ่งถึงไหลเอื่อย ขุ่นเล็กน้อย อากาศอุ่น','ใกล้จุดให้อาหาร ริมตลิ่ง ใต้กระชัง บ่อตกปลา','ลมช่วยเติมออกซิเจนในน้ำ ยังกินเหยื่อได้'],
+'Barbonymus gonionotus':[2,'ไม่ต้อง','น้ำไหลเอื่อยถึงนิ่ง กินดีช่วงหลังฝนที่น้ำเปลี่ยนสี','กลางน้ำ ใต้ต้นไม้ที่ผลไม้ร่วง ใกล้ฝาย'],
+'Barbonymus altus':[2,'ไม่ต้อง','น้ำไหลเอื่อย ใส','แม่น้ำ ใกล้ฝาย กลางน้ำ'],
+'Barbonymus schwanenfeldii':[2,'ไม่ต้อง','น้ำไหล ใส','ใต้ต้นไม้ริมน้ำ ใกล้แก่งและฝาย'],
+'Probarbus jullieni':[1,'ช็อคหลีด 30–50 ปอนด์','น้ำไหล ลึก พื้นทรายหรือกรวด','วังน้ำลึกในแม่น้ำใหญ่ แนวพื้นทราย'],
+'Datnioides pulcher':[1,'ช็อคหลีด 15–20 ปอนด์','น้ำไหลเอื่อย ใส','ตอไม้ ซอกหิน ใต้รากไม้'],
+'Chitala ornata':[1,'ช็อคหลีด 30–40 ปอนด์','น้ำนิ่ง ลึก ออกหากินช่วงพลบค่ำ','วังน้ำลึก ตอไม้ ต้นไม้ล้มในน้ำ'],
+'Notopterus notopterus':[1,'ไม่ต้อง','น้ำนิ่ง','ไม้น้ำ ริมตลิ่งที่มีร่มเงา'],
+'Pangasianodon hypophthalmus':[2,'ไม่ต้อง หรือช็อคหลีด 30 ปอนด์ ถ้าเป็นตัวใหญ่','น้ำนิ่งถึงไหล ขุ่น','กลางน้ำ ท่าน้ำวัด ใกล้จุดให้อาหาร หน้าดินลึก'],
+'Pangasianodon gigas':[2,'ช็อคหลีด 50–80 ปอนด์','น้ำลึก ไหลเอื่อย','ส่วนใหญ่อยู่ในบ่อตกปลาเฉพาะ (ในธรรมชาติหายากมาก)',BOTTOM],
+'Pangasius sanitwongsei':[1,'ช็อคหลีด 50–80 ปอนด์','น้ำลึก ไหล','วังน้ำลึกในแม่น้ำใหญ่ หน้าดิน'],
+'Pangasius larnaudii':[2,'ช็อคหลีด 30 ปอนด์','น้ำไหล ขุ่น','แม่น้ำใหญ่ ใต้ต้นไม้ที่ผลไม้ร่วง หน้าดิน'],
+'Pangasius bocourti':[2,'ช็อคหลีด 30 ปอนด์','น้ำไหล ขุ่น','แม่น้ำใหญ่ หน้าดิน'],
+'Mystus':[2,'ไม่ต้อง','น้ำขุ่น ไหลเอื่อย กินดีตอนกลางคืน','หน้าดินโคลน ใกล้ตลิ่ง',BOTTOM],
+'Hemibagrus nemurus':[2,'ไม่ต้อง หรือช็อคหลีด 20 ปอนด์','น้ำขุ่น ไหลเอื่อย กินดีตอนกลางคืน','หน้าดิน วังน้ำลึก ใกล้ตอไม้',BOTTOM],
+'Hemibagrus wyckioides':[1,'ช็อคหลีด 40–60 ปอนด์','น้ำไหลแรง ลึก','แก่งหิน ซอกหิน วังน้ำลึกในแม่น้ำ'],
+'Wallago attu':[1,'ช็อคหลีด 40–60 ปอนด์ (ฟันเยอะ)','น้ำขุ่น ลึก ออกล่าตอนกลางคืน','วังน้ำลึก ตอไม้ ใกล้ฝูงปลาเล็ก'],
+'Phalacronotus':[1,'ไม่ต้อง','น้ำไหล','กลางน้ำ ใกล้ตลิ่ง'],
+'Henicorhynchus siamensis':[2,'ไม่ต้อง','น้ำไหล ช่วงน้ำขึ้นหรือฤดูปลาอพยพ','ฝาย ทางน้ำไหล ริมตลิ่ง'],
+'Osteochilus':[2,'ไม่ต้อง','น้ำไหลเอื่อย','กลางน้ำ ใกล้ไม้น้ำ'],
+'Trichopodus trichopterus':[1,'ไม่ต้อง','น้ำนิ่ง ตื้น','พงหญ้า ผักตบ นาข้าว'],
+'Trichopodus pectoralis':[1,'ไม่ต้อง','น้ำนิ่ง ตื้น','บ่อ นาข้าว พืชน้ำหนาแน่น'],
+'Rasbora':[1,'ไม่ต้อง','น้ำไหลเอื่อย ใส','ผิวน้ำ ฝูงปลาริมตลิ่ง'],
+'Monopterus albus':[2,'ไม่ต้อง','น้ำตื้น พื้นโคลน','รูตามคันนา ตลิ่งโคลน',BOTTOM],
+'Macrognathus siamensis':[2,'ไม่ต้อง','น้ำไหลเอื่อย พื้นทราย','หน้าดินทราย ใต้ใบไม้',BOTTOM],
+'Mastacembelus armatus':[2,'ไม่ต้อง','น้ำไหล พื้นทรายหรือหิน','ซอกหิน ตอไม้ พื้นทราย',BOTTOM],
+'Oxyeleotris marmorata':[1,'ไม่ต้อง หรือช็อคหลีด 20 ปอนด์','น้ำนิ่ง ค่อนข้างลึก ออกหากินกลางคืน','ตอไม้ ซอกหิน กองหิน ใต้กระชัง'],
+'Osphronemus goramy':[1,'ช็อคหลีด 20 ปอนด์','น้ำนิ่ง','ใต้ต้นไม้ริมน้ำ ใกล้พืชน้ำ'],
+'Catlocarpio siamensis':[2,'ช็อคหลีด 50 ปอนด์','น้ำลึก','บ่อตกปลา วังน้ำลึก',BOTTOM],
+'Cyclocheilos enoplos':[2,'ช็อคหลีด 20 ปอนด์','น้ำไหล','แม่น้ำ วังน้ำ'],
+'Cyprinus carpio':[2,'ไม่ต้อง','น้ำนิ่ง ขุ่นเล็กน้อย','หน้าดินโคลน บ่อตกปลา',BOTTOM],
+'Cirrhinus cirrhosus':[2,'ไม่ต้อง','น้ำนิ่ง','หน้าดิน บ่อ อ่างเก็บน้ำ',BOTTOM],
+'Labeo rohita':[2,'ไม่ต้อง','น้ำนิ่ง','กลางน้ำถึงหน้าดิน บ่อตกปลา'],
+'Ctenopharyngodon idella':[2,'ช็อคหลีด 20 ปอนด์','น้ำนิ่ง','ใกล้พืชน้ำ หญ้าริมตลิ่ง'],
+'Balantiocheilos melanopterus':[1,'ไม่ต้อง','น้ำไหล ใส','กลางน้ำ'],
+'Hampala macrolepidota':[2,'ช็อคหลีด 15–20 ปอนด์','น้ำไหล ใส ออกซิเจนสูง','แก่ง ทางน้ำไหลแรง หน้าฝาย ปากลำห้วยที่ไหลลงเขื่อน','ลมทำให้ผิวน้ำกระเพื่อม ปลาระวังตัวน้อยลง เหยื่อปลอมยังได้ผล'],
+'Hampala dispar':[2,'ช็อคหลีด 10–15 ปอนด์','น้ำไหล ใส','ลำห้วย แก่งหิน ทางน้ำไหล'],
+'Puntioplites proctozystron':[2,'ไม่ต้อง','น้ำไหลเอื่อย','กลางน้ำ ใกล้ฝาย'],
+'Boesemania microlepis':[1,'ช็อคหลีด 20–30 ปอนด์','น้ำไหล ขุ่น ลึก','วังน้ำลึก หน้าดิน'],
+'Toxotes chatareus':[0,'ไม่ต้อง','น้ำกร่อย นิ่ง','ใต้ต้นไม้ริมน้ำ ป่าชายเลน','กินแมลงที่ผิวน้ำ ลมแรงผิวน้ำปั่นป่วน มักไม่กิน'],
+'Scatophagus argus':[1,'ไม่ต้อง','น้ำกร่อย','ป่าชายเลน ท่าเรือ เสาสะพาน'],
+'Lates calcarifer':[2,'ช็อคหลีด 30–50 ปอนด์ (ฝาเหงือกคม)','น้ำกร่อย ช่วงน้ำขึ้นหรือน้ำลงที่เริ่มไหล','ปากแม่น้ำ รากโกงกาง เสาสะพาน ประตูระบายน้ำ','ลมและคลื่นทำให้น้ำขุ่น กะพงกล้าออกล่า กินเหยื่อดี'],
+'Lutjanus':[2,'ช็อคหลีด 30–50 ปอนด์','น้ำทะเลใส ช่วงน้ำเปลี่ยน','แนวปะการัง กองหิน ซากเรือ'],
+'Lutjanus russellii':[2,'ช็อคหลีด 20–30 ปอนด์','ช่วงน้ำขึ้น','โขดหิน รากโกงกาง เสาท่าเรือ'],
+'Epinephelus':[2,'ช็อคหลีด 40–80 ปอนด์ (กันสายเสียดสีกับหิน)','น้ำเปลี่ยน กระแสอ่อน','ซอกหิน กองหิน ปะการัง ซากเรือ เขื่อนกันคลื่น',BOTTOM],
+'Scomberomorus commerson':[2,'สายสลิง (ฟันคมมาก)','น้ำใส คลื่นเล็กน้อย','นอกฝั่ง ตามฝูงปลาเหยื่อ กองหินใต้น้ำ'],
+'Euthynnus affinis':[2,'ช็อคหลีด 30–40 ปอนด์','น้ำใส ทะเลเปิด','จุดที่มีนกลงจับเหยื่อ ตามฝูงปลาเหยื่อ'],
+'Rastrelliger brachysoma':[1,'ไม่ต้อง','น้ำใส','ท่าเรือ สะพานปลา ใต้ไฟล่อตอนกลางคืน'],
+'Caranx':[2,'ช็อคหลีด 40–60 ปอนด์','น้ำไหล มีคลื่น','โขดหิน หัวแหลม ตามฝูงปลาเหยื่อ'],
+'Selaroides leptolepis':[1,'ไม่ต้อง','น้ำใส','ท่าเรือ ใต้ไฟตอนกลางคืน'],
+'Sphyraena':[2,'สายสลิง (ฟันคม)','น้ำใส','แนวปะการัง ท่าเรือ ใต้ไฟตอนกลางคืน'],
+'Eleutheronema tetradactylum':[2,'ช็อคหลีด 20–30 ปอนด์','น้ำขุ่น ช่วงน้ำขึ้น','ชายหาดโคลนหรือทราย ปากแม่น้ำ'],
+'Mugilidae':[1,'ไม่ต้อง','น้ำกร่อย ตื้น','ปากแม่น้ำ ท่าเรือ ผิวน้ำ'],
+'Sillago sihama':[1,'ไม่ต้อง','น้ำใส พื้นทราย ช่วงน้ำขึ้น','ชายหาดทราย หน้าดินตื้น'],
+'Nemipterus':[2,'ไม่ต้อง','น้ำลึกพอสมควร','หน้าดินทรายหรือโคลนนอกฝั่ง',BOTTOM],
+'Rachycentron canadum':[2,'ช็อคหลีด 50–80 ปอนด์','ทะเลเปิด','ใกล้ทุ่นลอย เสาแท่นขุดเจาะ ซากเรือ'],
+'Arius':[2,'ไม่ต้อง','น้ำขุ่น','หน้าดินโคลน ปากแม่น้ำ (ระวังเงี่ยงพิษ)',BOTTOM],
+'Plotosus canius':[2,'ไม่ต้อง','น้ำกร่อย','หน้าดิน ป่าชายเลน (ระวังเงี่ยงพิษ)',BOTTOM],
+'Johnius':[2,'ไม่ต้อง','น้ำขุ่น','หน้าดินโคลน ปากแม่น้ำ',BOTTOM],
+'Leiognathus':[1,'ไม่ต้อง','น้ำกร่อยถึงเค็ม','ท่าเรือ ชายฝั่ง'],
+'Pampus':[1,'ไม่ต้อง','ทะเลเปิด','หน้าดินโคลนนอกฝั่ง'],
+'Balistidae':[1,'ช็อคหลีด 30 ปอนด์ หรือสลิงสั้น (ฟันกัดสายขาดได้)','น้ำใส','แนวปะการัง กองหิน'],
+'Batoidea':[2,'ช็อคหลีด 50–80 ปอนด์','น้ำขุ่น','หน้าดินทรายหรือโคลน (ระวังเงี่ยงหาง)',BOTTOM],
+};
+const WIND_TXT=['❌ ลมแรงมักไม่กินเหยื่อ','⚠️ ลมแรงกินเหยื่อน้อยลง ให้หาฝั่งที่ลมสงบ หรือใช้เหยื่อที่ดำลึก','✅ ลมแรงยังกินเหยื่อได้'];
+
+// ---------- กล่องค้นหาปลา ----------
+function searchFishList(q){
+  q=q.trim().replace(/^ปลา/,''); if(!q) return [];
+  const hit=new Map();
+  [...FISH.map(f=>[f[0],f[1]]),...ALIAS].forEach(([n,sci])=>{ if(n.replace(/^ปลา/,'').includes(q)||sci.toLowerCase().includes(q.toLowerCase())) hit.set(sci,BY_SCI[sci]); });
+  return [...hit.values()].slice(0,12);
+}
+function leaderTag(t){ const sl=/สลิง/.test(t), sh=/ช็อค/.test(t), no=/^ไม่ต้อง/.test(t); return sl&&sh ? '🔗 สายสลิง / ช็อคหลีด' : sl ? '🔗 สายสลิง' : sh&&!no ? '🪢 ช็อคหลีด' : sh ? '➖ ไม่จำเป็น (ใช้ช็อคหลีดได้)' : '➖ ไม่ต้องต่อสายหน้า'; }
+async function showFish(sci){
+  const f=BY_SCI[sci], p=PROFILE[sci], box=$('#fsOut');
+  box.innerHTML='<span class="spin"></span>';
+  await fishImages([sci]);
+  const img=imgCache[sci];
+  const lureTypes = LURE[sci] ? LURE_TYPES.filter(L=>L.re.test(LURE[sci])) : [];
+  const row=(icon,title,body)=>`<div style="padding:9px 0;border-top:1px dashed var(--line)"><div style="font-weight:700">${icon} ${title}</div><div style="margin-top:3px">${body}</div></div>`;
+  let h=`<div style="display:flex;gap:12px;align-items:center;margin-bottom:8px">
+    <div class="pic" style="width:120px;height:90px">${img?`<img src="${img}" alt="${f[0]}" onerror="this.parentNode.innerHTML='🐟'">`:'🐟'}</div>
+    <div><div style="font-weight:700;font-size:20px">${f[0]}</div><div class="n2" style="font-style:italic;color:var(--mute)">${f[1]}</div></div></div>`;
+  h+=row('💧','แหล่งน้ำที่อยู่อาศัย',[...f[2]].map(k=>`<span class="tag">${WI[k]} ${WT[k]}</span>`).join(''));
+  if(p){
+    h+=row('📍','จุดที่มักพบ',p[3]);
+    h+=row('🌊','ลักษณะน้ำที่มีโอกาสติดเบ็ด',p[2]);
+    h+=row('💨','ลมแรงจะกินเหยื่อไหม',WIND_TXT[p[0]]+(p[4]?`<div class="muted">${p[4]}</div>`:''));
+  }
+  h+=row('🪝','เหยื่อสด',f[4]);
+  h+=row('🎯','เหยื่อปลอม', LURE[sci] ? `<b>${LURE[sci]}</b>${lureTypes.length?`<div class="row" style="margin-top:6px">${lureTypes.map(L=>`<div style="width:90px;text-align:center"><div style="height:54px;background:#e7f2f4;border-radius:8px">${LURE_SVG[L.k]||''}</div><div style="font-size:11px;color:var(--mute)">${L.k}</div></div>`).join('')}</div>`:''}` : 'ไม่นิยมตกด้วยเหยื่อปลอม ใช้เหยื่อสดดีกว่า');
+  if(p) h+=row('🧵','ต่อสายหน้าไหม',`<span class="tag hot" style="font-size:13px">${leaderTag(p[1])}</span><div style="margin-top:4px">${p[1]}</div>`);
+  h+=`<div id="fsSeason" style="padding-top:9px;border-top:1px dashed var(--line)"><span class="spin"></span></div>`;
+  box.innerHTML=h;
+  try{
+    const vals=await seasonOf(sci), mx=Math.max(1,...vals), cm=new Date().getMonth();
+    const best=vals.map((v,i)=>[v,i]).filter(x=>x[0]>0).sort((a,b)=>b[0]-a[0]).slice(0,3).map(x=>TH_M[x[1]]);
+    $('#fsSeason').innerHTML=`<div style="font-weight:700">📅 ฤดูกาลที่พบในประเทศไทย</div>
+      <div class="bars">${vals.map((v,i)=>`<div class="${i===cm?'cur':''}" style="height:${v/mx*100}%"></div>`).join('')}</div>
+      <div class="blabels">${TH_M.map(x=>`<span>${x.replace('.','').slice(0,2)}</span>`).join('')}</div>
+      ${best.length?`<p class="muted">เดือนที่พบบ่อยสุด: <b>${best.join(', ')}</b></p>`:'<p class="muted">ยังมีข้อมูลรายเดือนไม่พอ</p>'}`;
+  }catch(e){ $('#fsSeason').innerHTML='<span class="muted">โหลดข้อมูลฤดูกาลไม่ได้</span>'; }
+}
+function initFishSearch(){
+  const inp=$('#fsIn'), list=$('#fsList');
+  const draw=()=>{ const r=searchFishList(inp.value);
+    list.innerHTML = inp.value.trim() ? (r.length ? r.map(f=>`<button class="tag" data-s="${f[1]}" style="border:none;font-size:14px;padding:6px 12px;cursor:pointer">${f[0]}</button>`).join('') : '<span class="muted">ไม่พบปลาชื่อนี้ในรายการ</span>') : '';
+    list.querySelectorAll('button').forEach(b=>b.onclick=()=>{ inp.value=BY_SCI[b.dataset.s][0]; list.innerHTML=''; showFish(b.dataset.s); });
+  };
+  inp.oninput=draw;
+  $('#fsAll').onclick=()=>{ list.innerHTML=FISH.map(f=>`<button class="tag" data-s="${f[1]}" style="border:none;font-size:13px;padding:5px 10px;cursor:pointer">${f[0]}</button>`).join('');
+    list.querySelectorAll('button').forEach(b=>b.onclick=()=>{ inp.value=BY_SCI[b.dataset.s][0]; list.innerHTML=''; showFish(b.dataset.s); }); };
+}
+
+initFishSearch();
 $('#goBtn').onclick=search;
 </script>
 </body>
