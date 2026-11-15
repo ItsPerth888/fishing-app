@@ -25,14 +25,18 @@ def get(url, tries=3, timeout=30):
 # ---------- 1) GBIF: ปลาที่มีบันทึกในไทย ----------
 def gbif_species():
     keys = {}
+    # หา "ชั้น" (class) ของปลาทั้งหมดที่มีบันทึกในไทย จากไฟลัม Chordata
     taxa = []
-    for cls in ('Actinopterygii', 'Elasmobranchii', 'Holocephali', 'Sarcopterygii', 'Petromyzonti'):
+    FISHY = re.compile(r'Actinopter|Teleostei|Elasmobranch|Holocephal|Chondrichthy|Sarcopteryg|Petromyzon|Myxini|Cephalaspidomorph', re.I)
+    j = json.loads(get('https://api.gbif.org/v1/occurrence/search?country=TH&taxonKey=44&limit=0&facet=classKey&facetLimit=100'))
+    for c in (j.get('facets') or [{}])[0].get('counts', []):
         try:
-            m = json.loads(get('https://api.gbif.org/v1/species/match?rank=CLASS&name=' + cls))
-            if m.get('usageKey') and m.get('rank') == 'CLASS':
-                taxa.append(str(m['usageKey'])); log('class', cls, '->', m['usageKey'])
-        except Exception as e:
-            log('class match error', cls, e)
+            nm = json.loads(get('https://api.gbif.org/v1/species/' + c['name'])).get('canonicalName', '')
+        except Exception:
+            nm = ''
+        log('class', c['name'], nm, c['count'])
+        if FISHY.search(nm or ''): taxa.append(c['name'])
+    log('fish classes:', taxa)
     for taxon in taxa:
         off = 0
         while True:
