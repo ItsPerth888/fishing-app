@@ -7,10 +7,14 @@ on:
     - cron: '17 20 1 * *'   # อัปเดตเดือนละครั้ง
 permissions:
   contents: write
+  actions: write
+concurrency:
+  group: thai-names
+  cancel-in-progress: true
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 330
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -18,9 +22,15 @@ jobs:
       - run: python scripts/build_thai_names.py
         continue-on-error: true
       - name: Commit data
+        if: always()
         run: |
           git config user.name "github-actions"
           git config user.email "github-actions@users.noreply.github.com"
-          git add data/
+          git add -A data/
           git diff --cached --quiet || git commit -m "Update Thai fish names data"
           git pull --rebase origin main && git push
+      - name: Continue if not finished
+        if: always()
+        env: { GH_TOKEN: '${{ github.token }}' }
+        run: |
+          if [ -f data/INCOMPLETE ]; then gh workflow run build-thai-names.yml --ref main; fi

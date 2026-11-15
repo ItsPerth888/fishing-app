@@ -4,7 +4,7 @@
 3) ตัวที่ไม่มีชื่อไทย -> ค้นชื่อวิทยาศาสตร์ใน Wikidata/วิกิพีเดียไทย
 ผลลัพธ์: data/fish_th.json และ data/build_log.txt
 """
-import json, re, time, html, urllib.request, urllib.parse
+import json, os, re, time, html, urllib.request, urllib.parse
 from concurrent.futures import ThreadPoolExecutor
 
 LOG = []
@@ -123,45 +123,71 @@ def wikidata(names):
         time.sleep(1)
     return found
 
+BUDGET = 270 * 60  # วินาที: หยุดเองก่อนหมดเวลาของ GitHub แล้วรอบหน้าทำต่อ
+def save(sp, done):
+    out = [{'k': s['key'], 's': s['sci'], 'f': s['family'], 'n': s['n'], 't': s.get('th', []), 'l': s.get('local', []),
+            'src': s.get('src', ''), 'd': 1 if s.get('done') else 0, 'r': s.get('retry', 0)} for s in sp]
+    json.dump(out, open('data/fish_th.json', 'w', encoding='utf-8'), ensure_ascii=False, separators=(',', ':'))
+    if done:
+        if os.path.exists('data/INCOMPLETE'): os.remove('data/INCOMPLETE')
+    else:
+        open('data/INCOMPLETE', 'w').write('resume\n')
+
 def main():
-    import os; os.makedirs('data', exist_ok=True)
+    os.makedirs('data', exist_ok=True)
     t0 = time.time()
+    # ผลจากรอบก่อน (ทำต่อจากที่ค้าง)
+    prev = {}
+    try:
+        for x in json.load(open('data/fish_th.json', encoding='utf-8')):
+            prev[x['k']] = x
+    except Exception:
+        pass
+    log('resume: already done', sum(1 for x in prev.values() if x.get('d')))
     sp = gbif_species()
+    sp.sort(key=lambda s: -s['n'])  # ปลาที่พบบ่อยก่อน
     log('species with names:', len(sp))
+    for s in sp:
+        p = prev.get(s['key'])
+        if p and p.get('d'): s.update(th=p['t'], local=p['l'], src=p['src'], done=True)
+        elif p: s['retry'] = p.get('r', 0)
+    todo = [s for s in sp if not s.get('done')]
+    log('todo thbif:', len(todo))
     stats = {'ok': 0, 'err': 0, 'named': 0}
     def one(s):
-        r, st = thbif(s['sci']); time.sleep(0.3)
+        if time.time() - t0 > BUDGET: return s, None, 'skip'
+        r, st = thbif(s['sci']); time.sleep(0.2)
         return s, r, st
-    with ThreadPoolExecutor(4) as ex:
-        res = list(ex.map(one, sp))
-    # ลองซ้ำตัวที่ error (ช้าลง)
-    bad = [s for s, r, st in res if st != 'ok']
-    if bad:
-        log('retry thbif errors:', len(bad))
-        with ThreadPoolExecutor(2) as ex:
-            again = {id(s): (r, st) for s, r, st in ex.map(one, bad)}
-        res = [(s,) + again.get(id(s), (r, st)) for s, r, st in res]
-    if True:
-        for s, r, st in res:
+    finished = True
+    from concurrent.futures import as_completed
+    with ThreadPoolExecutor(8) as ex:
+        futs = [ex.submit(one, s) for s in todo]
+        for i, f in enumerate(as_completed(futs), 1):
+            s, r, st = f.result()
+            if st == 'skip': finished = False; continue
             if st == 'ok':
                 stats['ok'] += 1
-                s['th'], s['local'], s['src'] = r['th'], r['local'], 'thbif' if (r['th'] or r['local']) else ''
+                s.update(th=r['th'], local=r['local'], src='thbif' if (r['th'] or r['local']) else '', done=True)
                 if r['th']: stats['named'] += 1
             else:
-                stats['err'] += 1; s['th'], s['local'], s['src'] = [], [], ''
-    log('thbif:', stats)
+                stats['err'] += 1
+                s.update(th=[], local=[], src='', done=s.get('retry', 0) >= 1)  # error ครั้งที่ 2 ถือว่าจบ
+                s['retry'] = s.get('retry', 0) + 1
+            if i % 200 == 0:
+                save(sp, False); log('progress', i, '/', len(todo), stats, '%.0fs' % (time.time() - t0))
+    log('thbif:', stats, 'finished' if finished else 'stopped by time budget')
     for x in SAMPLES: log('sample', x)
-    missing = [s['sci'] for s in sp if not s['th']]
-    log('no Thai name from thbif:', len(missing), '-> wikidata')
-    wd = wikidata(missing)
+    # วิกิ: เฉพาะตัวที่ยังไม่มีชื่อไทย
+    missing = [s['sci'] for s in sp if s.get('done') and not s.get('th') and 'wiki' not in s.get('src', '')]
+    log('no Thai name -> wikidata:', len(missing))
+    wd = wikidata(missing) if missing and time.time() - t0 < BUDGET + 600 else {}
     for s in sp:
-        if not s['th'] and s['sci'] in wd:
-            s['th'] = wd[s['sci']]; s['src'] = (s['src'] + '+wiki').strip('+')
-    log('filled from wiki:', sum(1 for s in sp if 'wiki' in s.get('src', '')))
-    sp.sort(key=lambda s: -s['n'])
-    out = [{'k': s['key'], 's': s['sci'], 'f': s['family'], 'n': s['n'], 't': s['th'], 'l': s['local'], 'src': s['src']} for s in sp]
-    json.dump(out, open('data/fish_th.json', 'w', encoding='utf-8'), ensure_ascii=False, separators=(',', ':'))
-    log('with Thai name:', sum(1 for s in out if s['t']), 'of', len(out), '| time %.0fs' % (time.time() - t0))
+        if not s.get('th') and s['sci'] in wd:
+            s['th'] = wd[s['sci']]; s['src'] = (s.get('src', '') + '+wiki').strip('+')
+    all_done = finished and all(s.get('done') for s in sp)
+    save(sp, all_done)
+    log('with Thai name:', sum(1 for s in sp if s.get('th')), 'of', len(sp), '| done', sum(1 for s in sp if s.get('done')),
+        '| complete' if all_done else '| INCOMPLETE (next run continues)', '| time %.0fs' % (time.time() - t0))
 
 try:
     main()
