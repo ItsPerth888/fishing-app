@@ -1,4 +1,4 @@
-resume: already done 2498
+resume: already done 3269
 fish order Perciformes | class: - | 49445
 fish order Cypriniformes | class: - | 15487
 fish order Siluriformes | class: - | 5913
@@ -101,10 +101,12 @@ GBIF taxon 879 offset 0 -> 1
 GBIF taxon 890 offset 0 -> 0
 GBIF species total: 3269
 species with names: 3269
-todo thbif: 771
-progress 200 / 771 {'ok': 0, 'err': 200, 'named': 0} 350s
-progress 400 / 771 {'ok': 0, 'err': 400, 'named': 0} 530s
-progress 600 / 771 {'ok': 0, 'err': 600, 'named': 0} 707s
-thbif: {'ok': 0, 'err': 771, 'named': 0} finished
-no Thai name -> wikidata: 1717
-with Thai name: 1599 of 3269 | done 3269 | complete | time 890s
+mode: slow retry workers 1
+todo thbif: 724
+progress 200 / 724 {'ok': 0, 'err': 200, 'named': 0} 1860s
+progress 400 / 724 {'ok': 0, 'err': 400, 'named': 0} 3506s
+progress 600 / 724 {'ok': 0, 'err': 600, 'named': 0} 5167s
+error kinds: {'HTTPError404': 724}
+thbif: {'ok': 0, 'err': 724, 'named': 0} finished
+no Thai name -> wikidata: 1670
+with Thai name: 1599 of 3269 | done 3269 | complete | time 6221s
