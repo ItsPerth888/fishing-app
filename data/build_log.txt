@@ -1,28 +1,126 @@
-class 212 Aves 6027040
-class 11592253 Squamata 69731
-class 359 Mammalia 48107
-class 131 Amphibia 38274
-class 11418114 Testudines 4525
-class 121 Elasmobranchii 2302
-class 11493978 Crocodylia 234
-class 356 Ascidiacea 60
-class 120 Holocephali 8
-class 7375758 Leptocardii 7
-class 119 Myxini 4
-class 207 Thaliacea 2
-class 11500725 Dipneusti 1
-class 11733052 Coelacanthi 1
-fish classes: ['121', '120', '119']
-GBIF taxon 121 offset 0 -> 151
-GBIF taxon 120 offset 0 -> 2
-GBIF taxon 119 offset 0 -> 2
-GBIF species total: 155
-species with names: 155
-retry thbif errors: 27
-thbif: {'ok': 128, 'err': 27, 'named': 120}
-sample ('Taeniura lymma', ['ปลากระเบนทอง', 'กระเบนทอง', 'กระเบนหิน', 'กระเบนหางพัดจุดฟ้า', 'ปลากระเบนหิน', 'ปลากระเบนหางพัดจุดฟ้า'], [])
-sample ('Carcharhinus melanopterus', ['ฉลามหูดำ', 'ฉลามครีบดำ', 'ปลาฉลามหูดำ', 'ปลาฉลามครีบดำ'], [])
-sample ('Carcharhinus sorrah', ['ฉลามหูดำ', 'ฉลามหนูหัวแหลม', 'ปลาฉลามหูดำ', 'ฉลามครีบดำ', 'ฉลามจุดดำ', 'ปลาฉลามครีบดำ', 'ปลาฉลามหนูหัวแหลม', 'ปลาฉลามจุดดำ', 'ปลาฉลามหางจุด'], [])
-no Thai name from thbif: 35 -> wikidata
-filled from wiki: 5
-with Thai name: 125 of 155 | time 327s
+resume: already done 0
+fish order Perciformes | class: - | 49445
+fish order Cypriniformes | class: - | 15487
+fish order Siluriformes | class: - | 5913
+fish order Tetraodontiformes | class: - | 3508
+fish order Clupeiformes | class: - | 2318
+fish order Scorpaeniformes | class: - | 2031
+fish order Beloniformes | class: - | 1939
+fish order Pleuronectiformes | class: - | 1338
+fish order Myliobatiformes | class: Elasmobranchii | 1170
+fish order Synbranchiformes | class: - | 1159
+fish order Anguilliformes | class: - | 1154
+fish order Syngnathiformes | class: - | 939
+fish order Mugiliformes | class: - | 832
+fish order Atheriniformes | class: - | 576
+fish order Carcharhiniformes | class: Elasmobranchii | 576
+fish order Cyprinodontiformes | class: - | 478
+fish order Aulopiformes | class: - | 445
+fish order Osteoglossiformes | class: - | 415
+fish order Orectolobiformes | class: Elasmobranchii | 317
+fish order Beryciformes | class: - | 296
+fish order Gadiformes | class: - | 157
+fish order Rhinopristiformes | class: Elasmobranchii | 118
+fish order Lophiiformes | class: - | 89
+fish order Batrachoidiformes | class: - | 76
+fish order Gasterosteiformes | class: - | 76
+fish order Ophidiiformes | class: - | 65
+fish order Torpediniformes | class: Elasmobranchii | 58
+fish order Stomiiformes | class: - | 57
+fish order Elopiformes | class: - | 41
+fish order Gonorynchiformes | class: - | 34
+fish order Salmoniformes | class: - | 34
+fish order Gobiesociformes | class: - | 21
+fish order Characiformes | class: - | 19
+fish order Lepisosteiformes | class: - | 16
+fish order Copelata | class: - | 16
+fish order Squaliformes | class: Elasmobranchii | 13
+fish order Rajiformes | class: Elasmobranchii | 12
+fish order Myctophiformes | class: - | 10
+fish order Chimaeriformes | class: Holocephali | 8
+fish order Lamniformes | class: Elasmobranchii | 7
+fish order Osmeriformes | class: - | 5
+fish order Albuliformes | class: - | 4
+fish order Amiiformes | class: - | 4
+fish order Myxiniformes | class: Myxini | 4
+fish order Hexanchiformes | class: Elasmobranchii | 4
+fish order Lampriformes | class: - | 3
+fish order Ateleopodiformes | class: - | 1
+fish order Ceratodontiformes | class: Dipneusti | 1
+fish order Stephanoberyciformes | class: - | 1
+fish orders: 49
+GBIF taxon 587 offset 0 -> 1000
+GBIF taxon 587 offset 1000 -> 589
+GBIF taxon 1153 offset 0 -> 461
+GBIF taxon 708 offset 0 -> 228
+GBIF taxon 772 offset 0 -> 131
+GBIF taxon 538 offset 0 -> 89
+GBIF taxon 590 offset 0 -> 118
+GBIF taxon 498 offset 0 -> 54
+GBIF taxon 588 offset 0 -> 90
+GBIF taxon 8214029 offset 0 -> 60
+GBIF taxon 889 offset 0 -> 18
+GBIF taxon 495 offset 0 -> 94
+GBIF taxon 773 offset 0 -> 57
+GBIF taxon 1067 offset 0 -> 19
+GBIF taxon 496 offset 0 -> 20
+GBIF taxon 887 offset 0 -> 39
+GBIF taxon 547 offset 0 -> 9
+GBIF taxon 497 offset 0 -> 25
+GBIF taxon 1069 offset 0 -> 10
+GBIF taxon 769 offset 0 -> 10
+GBIF taxon 499 offset 0 -> 22
+GBIF taxon 549 offset 0 -> 9
+GBIF taxon 9412443 offset 0 -> 11
+GBIF taxon 1305 offset 0 -> 12
+GBIF taxon 1106 offset 0 -> 7
+GBIF taxon 550 offset 0 -> 5
+GBIF taxon 1308 offset 0 -> 16
+GBIF taxon 881 offset 0 -> 9
+GBIF taxon 774 offset 0 -> 5
+GBIF taxon 1162 offset 0 -> 3
+GBIF taxon 1164 offset 0 -> 2
+GBIF taxon 1313 offset 0 -> 6
+GBIF taxon 1163 offset 0 -> 4
+GBIF taxon 537 offset 0 -> 1
+GBIF taxon 1167 offset 0 -> 2
+GBIF taxon 1441 offset 0 -> 0
+GBIF taxon 883 offset 0 -> 5
+GBIF taxon 884 offset 0 -> 3
+GBIF taxon 1306 offset 0 -> 6
+GBIF taxon 880 offset 0 -> 2
+GBIF taxon 885 offset 0 -> 5
+GBIF taxon 1068 offset 0 -> 3
+GBIF taxon 1104 offset 0 -> 3
+GBIF taxon 494 offset 0 -> 1
+GBIF taxon 766 offset 0 -> 2
+GBIF taxon 770 offset 0 -> 2
+GBIF taxon 1166 offset 0 -> 1
+GBIF taxon 1105 offset 0 -> 0
+GBIF taxon 879 offset 0 -> 1
+GBIF taxon 890 offset 0 -> 0
+GBIF species total: 3269
+species with names: 3269
+todo thbif: 3269
+progress 200 / 3269 {'ok': 200, 'err': 0, 'named': 180} 315s
+progress 400 / 3269 {'ok': 396, 'err': 4, 'named': 346} 451s
+progress 600 / 3269 {'ok': 590, 'err': 10, 'named': 501} 578s
+progress 800 / 3269 {'ok': 780, 'err': 20, 'named': 640} 708s
+progress 1000 / 3269 {'ok': 961, 'err': 39, 'named': 750} 837s
+progress 1200 / 3269 {'ok': 1143, 'err': 57, 'named': 870} 971s
+progress 1400 / 3269 {'ok': 1320, 'err': 80, 'named': 968} 1104s
+progress 1600 / 3269 {'ok': 1494, 'err': 106, 'named': 1070} 1241s
+progress 1800 / 3269 {'ok': 1657, 'err': 143, 'named': 1154} 1376s
+progress 2000 / 3269 {'ok': 1818, 'err': 182, 'named': 1225} 1510s
+progress 2200 / 3269 {'ok': 1962, 'err': 238, 'named': 1294} 1647s
+progress 2400 / 3269 {'ok': 2098, 'err': 302, 'named': 1336} 1787s
+progress 2600 / 3269 {'ok': 2220, 'err': 380, 'named': 1406} 1932s
+progress 2800 / 3269 {'ok': 2324, 'err': 476, 'named': 1429} 2084s
+progress 3000 / 3269 {'ok': 2402, 'err': 598, 'named': 1465} 2238s
+progress 3200 / 3269 {'ok': 2471, 'err': 729, 'named': 1496} 2391s
+thbif: {'ok': 2498, 'err': 771, 'named': 1511} finished
+sample ('Equulites stercorarius', ['ปลาแป้นแก้ว'], [])
+sample ('Trichopsis vittata', ['กริมควาย', 'ปลากริมควาย', 'ปลากริมข้างลาย', 'กริม', 'กริมหัวโม่ง', 'ปลากริม'], ['Pla kad pa'])
+sample ('Trichopodus trichopterus', ['กระดี่หม้อ', 'ปลากระดี่หม้อ', 'ปลากะดี่หม้อ'], ['Pla ka di'])
+no Thai name -> wikidata: 987
+with Thai name: 1552 of 3269 | done 2498 | INCOMPLETE (next run continues) | time 2460s
